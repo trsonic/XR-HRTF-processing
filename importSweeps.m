@@ -2,7 +2,8 @@ close all
 clear
 
 % subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/';
-subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
+% subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
+subjectdir = 'data/20211012-q2_tr/';
 
 sweepdir = [subjectdir 'sweeps/'];
 [y_inv_sweep, Fs] = audioread([sweepdir 'ZZ_inv_sweep.wav']);
@@ -27,8 +28,11 @@ for i = 1:length(sweepBank)
     irLength = size(fullIr,1);
     
     % skip the first half of the ir and cut some silence
-    cut_start = floor(irLength/2) + 2800; 
-    cut_end = cut_start + 4095;
+%     cut_start = floor(irLength/2) + 2800;
+%     cut_end = cut_start + 4095;
+    
+    cut_start = floor(irLength/2);
+    cut_end = cut_start + 8191;
     
     irBank(i).fullIrLeft = fullIr(cut_start:cut_end);
     
