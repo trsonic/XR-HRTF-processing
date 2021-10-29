@@ -12,7 +12,7 @@ subjectdir = 'data/20211012-q2_tr/';
 load([subjectdir 'irBank.mat'])
 
 % time domain windowing
-irBank = winIRs(irBank, 'true', [subjectdir 'figures/windowing/']); % set 'true' to save plots
+irBank = winIRs(irBank, 'false', [subjectdir 'figures/windowing/']); % set 'true' to save plots
 
 % calculate FF measurement inv filter and normalize all hrirs
 irBank = normalizeIRs(irBank, 'true');
@@ -22,7 +22,7 @@ dfe_enabled = true;
 irBank = dfeHRIRs(irBank, dfe_enabled, 'true', [subjectdir 'figures/']);
 
 % plot magnitudes
-plotMagnitudes(irBank, [subjectdir 'figures/'])
+ plotMagnitudes(irBank, [subjectdir 'figures/'])
 
 % save ambix config file
 saveAsAmbix(irBank, subjectdir)
@@ -552,7 +552,7 @@ function saveAsSofa(IRbank, subjectdir)
     %% save the SOFA file
     % Data compression (0..uncompressed, 9..most compressed)
     compression=1; % results in a nice compression within a reasonable processing time
-    SOFAfn=fullfile(subjectdir,'xr_122pt.sofa');
+    SOFAfn=fullfile(subjectdir,'xr-hrtf.sofa');
     disp(['Saving:  ' SOFAfn]);
     SOFAsave(SOFAfn, Obj, compression);
 end
