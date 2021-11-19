@@ -3,7 +3,9 @@ clear
 
 % subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/';
 % subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
-subjectdir = 'data/20211012-q2_tr/';
+% subjectdir = 'data/20211012-q2_tr/';
+% subjectdir = 'data/20211104-q2_tr/';
+subjectdir = 'data/20211105-A/';
 
 sweepdir = [subjectdir 'sweeps/'];
 [y_inv_sweep, Fs] = audioread([sweepdir 'ZZ_inv_sweep.wav']);
