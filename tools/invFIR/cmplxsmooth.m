@@ -9,7 +9,7 @@ Noct=2*Noct;
 % octave center frequencies
 f1=1;
 i=0;
-while f1 < 22050
+while f1 < fs/2
     f1=f1*10^(3/(10*Noct));
     i=i+1;
     fc(i,:)=f1;

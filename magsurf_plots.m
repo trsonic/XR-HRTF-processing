@@ -6,7 +6,9 @@ addpath('../API_MO/API_MO/')
 SOFAstart;
 
 % sofafile = 'data/20201217-122pt-2.5m-dayton_vt/xr_122pt.sofa';
-sofafile = 'data/20211012-q2_tr/xr_122pt.sofa';
+% sofafile = 'data/20211012-q2_tr/xr-hrtf.sofa';
+sofafile = 'data/20211126-TR/xr-hrtf.sofa';
+
 
 %% load sofa file
 hrtf = SOFAload(sofafile);

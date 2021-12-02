@@ -1,6 +1,7 @@
 close all
 clear
 
+addpath('tools/')
 addpath('tools/invFIR/')
 addpath('tools/VoronoiSphere/')
 addpath('../API_MO/API_MO/')
@@ -8,14 +9,17 @@ addpath('../API_MO/API_MO/')
 % subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/';
 % subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
 % subjectdir = 'data/20211012-q2_tr/';
-subjectdir = 'data/20211104-q2_tr/';
-% subjectdir = 'data/20211105-A/';
+% subjectdir = 'data/20211105-A-Jan/';
+% subjectdir = 'data/20211126-TR/';
+subjectdir = 'data/20211126-Gavin/';
 
 load([subjectdir 'irBank.mat'])
+mkdir([subjectdir 'figures/'])
 plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
 
 % time domain windowing
-irBank = winIRs(irBank, 'true', [subjectdir 'figures/windowing/']); % set 'true' to save plots
+plotting = 'true';
+irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
 plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
 
 % calculate FF measurement inv filter and normalize all hrirs
@@ -36,55 +40,78 @@ saveAsAmbix(irBank, subjectdir)
 saveAsSofa(irBank, subjectdir)
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
-%     % default option
-%     Nwin = 512;
-%     win = hann(Nwin).^6;
-
-%     % new option
-%     win = hann(200).^4;
-%     win = [win(1:end/2); ones(56,1); win(end/2+1:end);];
-%     Nwin = length(win);
-
     % new option 2
     win = hann(300).^4;
     win = [win(1:end/2); ones(100,1); win(end/2+1:end);];
     Nwin = length(win);
     
     for i = 1:length(IRbank)
-        irLeft = [zeros(Nwin,1); IRbank(i).fullIrLeft; zeros(Nwin,1)];
-        irRight = [zeros(Nwin,1); IRbank(i).fullIrRight; zeros(Nwin,1)];
+        irLeft = [zeros(Nwin,1); IRbank(i).fullIrLeft];
+        irRight = [zeros(Nwin,1); IRbank(i).fullIrRight];
         Fs = IRbank(i).Fs;
-        [~,maxL] = max(abs(irLeft));
-        [~,maxR] = max(abs(irRight));
-        
-        % check if maxL and maxR are spaced from each other by more than
-        % 900 us
-        n = floor(0.0009 * Fs); %43 samples@48k, approximate maximum itd
-        while abs(maxL - maxR) > n
-            if maxL - maxR > n
-                [~,maxL] = max(abs(irLeft(1:maxR+n)));
-            elseif maxR - maxL > n
-                [~,maxR] = max(abs(irRight(1:maxL+n)));
-            end
+        [IRbank(i).ITD, maxL, maxR] = getITD(irLeft,irRight,Fs);
+
+        % apply window
+        if mod(Nwin,2) ~= 0
+            disp('wrong window length, must be even')
         end
         
-        % create empty vectors
-        IRbank(i).winIrLeft = zeros(2*Nwin,1);
-        IRbank(i).winIrRight = zeros(2*Nwin,1);
+        winstart = maxL-Nwin/2+1;
+        winend = maxL+Nwin/2;
+        irLeft(1:winstart-1) = 0;
+        irLeft(winstart:winend) = irLeft(winstart:winend) .* win;
+        irLeft(winend+1:end) = 0;
+        winstart = maxR-Nwin/2+1;
+        winend = maxR+Nwin/2;
+        irRight(1:winstart-1) = 0;
+        irRight(winstart:winend) = irRight(winstart:winend) .* win;
+        irRight(winend+1:end) = 0;
         
-        % calculate the lag of hrirs in reference to the mean TOA
-        shiftL = maxL - floor(mean([maxL maxR]));
-        shiftR = maxR - floor(mean([maxL maxR]));
+        % mean time of arrival for both ear signals expressed in samples
+        toasmp = round(mean([maxL, maxR]));
+
         
-        % do the windowing and copy output to the new vectors with
-        % appropriate sample index shifts
-        IRbank(i).winIrLeft(Nwin-Nwin/2+1+shiftL:Nwin+Nwin/2+shiftL) = irLeft(maxL-Nwin/2+1:maxL+Nwin/2) .* win;
-        IRbank(i).winIrRight(Nwin-Nwin/2+1+shiftR:Nwin+Nwin/2+shiftR) = irRight(maxR-Nwin/2+1:maxR+Nwin/2) .* win;
+        % cut irs
         preSamples = floor(0.001 * Fs); %48 samples @ 48kHz
-        IRbank(i).winIrLeft = IRbank(i).winIrLeft(end/2-preSamples+1:end-preSamples);
-        IRbank(i).winIrRight = IRbank(i).winIrRight(end/2-preSamples+1:end-preSamples);
-        IRbank(i).maxL = maxL - Nwin; % because Nwin of zeroes was added at the beginning and end
+        afterSamples = 400-preSamples;
+        IRbank(i).winIrLeft = irLeft(toasmp-preSamples+1:toasmp+afterSamples);
+        IRbank(i).winIrRight = irRight(toasmp-preSamples+1:toasmp+afterSamples);
+        IRbank(i).maxL = maxL - Nwin; % because Nwin of zeroes was added at the beginning
         IRbank(i).maxR = maxR - Nwin;
+        IRbank(i).toasmp = toasmp - Nwin;
+        IRbank(i).winMaxL = maxL - toasmp + preSamples;
+        IRbank(i).winMaxR = maxR - toasmp + preSamples;
+    end
+    
+    % plot ITD
+    for i = 1:length(IRbank)
+        IRbank(i).ITDwin = (IRbank(i).maxR - IRbank(i).maxL)  * 10^6 / IRbank(i).Fs;
+    end
+    figure('Name','ITD','NumberTitle','off','WindowStyle','docked');
+    tiledlayout(1,2)
+    lim = [-1000 1000];
+    nexttile
+    hold on
+    plotAzEl([IRbank.azimuth],[IRbank.elevation],[IRbank.ITD], lim)
+    nexttile
+    hold on
+    plotAzEl([IRbank.azimuth],[IRbank.elevation],[IRbank.ITDwin], lim)
+    
+    % plot distance
+    figure('Name','distance','NumberTitle','off','WindowStyle','docked');
+    scatter([IRbank.distance],[IRbank.toasmp] * 343/Fs)
+    xlabel('measured distance by HMD (m)')
+    ylabel('measured distance acoustically (m)')
+    
+    % correct gains
+    ref_dist = 1.5;
+    for i = 1:length(IRbank)
+        if ~isnan(IRbank(i).distance)
+            gain_lin = IRbank(i).distance/ref_dist;
+            IRbank(i).gain = 20*log(gain_lin);
+            IRbank(i).winIrLeft = IRbank(i).winIrLeft * gain_lin;
+            IRbank(i).winIrRight = IRbank(i).winIrRight * gain_lin;
+        end
     end
     
     if strcmp(plotting,'true')
@@ -101,6 +128,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
 %             plot(20*log10(sqrt(IRbank(i).fullIrLeft.^2)),'-b')
             plot(IRbank(i).fullIrLeft,'-b')
             xline(IRbank(i).maxL, '--k')
+            xline(IRbank(i).toasmp, '--g')
             xlabel('Samples')
             ylabel('Amplitude')
             ylim(range)
@@ -127,6 +155,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             cla
             plot(IRbank(i).fullIrRight,'-b')
             xline(IRbank(i).maxR, '--k')
+            xline(IRbank(i).toasmp, '--g')
             xlabel('Samples')
             ylabel('Amplitude')
             ylim(range)
@@ -152,9 +181,9 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             width = 4*figlen;
             height = 3*figlen;
             set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-            saveas(gcf,[save_fig_folder 'windowing_fig' num2str(i)  '.jpg'])        
+            saveas(gcf,[save_fig_folder 'windowing_fig' num2str(i)  '.jpg'])
+%             close
         end
-        close
     end
 end
 
@@ -162,15 +191,17 @@ function irBank = normalizeIRs(irBank, plotting)
     % pick the free-field measurement and calculate inverse filter
     i = length(irBank);
     Fs = irBank(i).Fs;
-    Nfft = length(irBank(i).winIrLeft)*8;
-    FFIR = [irBank(i).winIrLeft irBank(i).winIrRight];
-    invh = invFIR('minphase', FFIR, Nfft, 0, Nfft, [10 Fs/2], [120 0], 1, Fs);
+    FFIR(:,1) = flattenMagHF(irBank(i).winIrLeft, Fs);
+    FFIR(:,2) = flattenMagHF(irBank(i).winIrRight, Fs);
+%     FFIR = [irBank(i).winIrLeft irBank(i).winIrRight];
+    Nfft = length(irBank(i).winIrLeft)*1;
+    invh = invFIR('minphase', FFIR, Nfft, 0, Nfft, [0 Fs/2], [0 0], 1, Fs);
     
-    % low pass the inverse filter
-    lpFilt = designfilt('lowpassiir','FilterOrder',2, ...
-         'PassbandFrequency',22000,'PassbandRipple',0.5, ...
-         'SampleRate',Fs);
-    invh = filter(lpFilt,invh);
+%     % low pass the inverse filter
+%     lpFilt = designfilt('lowpassiir','FilterOrder',2, ...
+%          'PassbandFrequency',22000,'PassbandRipple',0.5, ...
+%          'SampleRate',Fs);
+%     invh = filter(lpFilt,invh);    
     
     if strcmp(plotting,'true')
         % plot freefield and inverse filter
@@ -183,18 +214,30 @@ function irBank = normalizeIRs(irBank, plotting)
         f = (Fs/Nfft:Fs/Nfft:Fs)';
         mag = 20*log10(abs(fft(fullIR, Nfft)));
         plot(f,mag,'-g','LineWidth',1);
-        
-        fullIR = invh(:,1);
-        Nfft = length(fullIR);
-        f = (Fs/Nfft:Fs/Nfft:Fs)';
-        mag = 20*log10(abs(fft(fullIR, Nfft)));
-        plot(f,mag,'--g','LineWidth',2);
 
         fullIR = irBank(i).winIrRight;
         Nfft = length(fullIR);
         f = (Fs/Nfft:Fs/Nfft:Fs)';
         mag = 20*log10(abs(fft(fullIR, Nfft)));
         plot(f,mag,'-r','LineWidth',1);
+        
+        fullIR = FFIR(:,1);
+        Nfft = length(fullIR);
+        f = (Fs/Nfft:Fs/Nfft:Fs)';
+        mag = 20*log10(abs(fft(fullIR, Nfft)));
+        plot(f,mag,'-.g','LineWidth',1);
+
+        fullIR = FFIR(:,2);
+        Nfft = length(fullIR);
+        f = (Fs/Nfft:Fs/Nfft:Fs)';
+        mag = 20*log10(abs(fft(fullIR, Nfft)));
+        plot(f,mag,'-.r','LineWidth',1);
+        
+        fullIR = invh(:,1);
+        Nfft = length(fullIR);
+        f = (Fs/Nfft:Fs/Nfft:Fs)';
+        mag = 20*log10(abs(fft(fullIR, Nfft)));
+        plot(f,mag,'--g','LineWidth',2);
         
         fullIR = invh(:,2);
         Nfft = length(fullIR);
@@ -206,18 +249,22 @@ function irBank = normalizeIRs(irBank, plotting)
         grid on
         xlim([10 Fs/2]);
         % ylim([-80 -30]);
+        legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
+
         xlabel('Frequency (Hz)');
         ylabel('Magnitude (dB)');
         
         % plot freefield impulse response
         figure('Name','FF IR','NumberTitle','off','WindowStyle','docked');
+        subplot(2,1,1)
         hold on
         box on
         plot(FFIR(:,1),'g')
         plot(FFIR(:,2),'r')
         
         % plot inverese filter for freefield impulse response
-        figure('Name','FF inv filter IR','NumberTitle','off','WindowStyle','docked');
+%         figure('Name','FF inv filter IR','NumberTitle','off','WindowStyle','docked');
+        subplot(2,1,2)
         hold on
         box on
         plot(invh(:,1),'g')
@@ -229,6 +276,13 @@ function irBank = normalizeIRs(irBank, plotting)
         irBank(i).hrirLeft = conv(irBank(i).winIrLeft, invh(:,1));
         irBank(i).hrirRight = conv(irBank(i).winIrRight, invh(:,2));   
     end
+    
+    %% add LF extension
+    for i = 1:length(irBank)
+        irBank(i).hrirLeft = LFextension(irBank(i).hrirLeft, irBank(i).winMaxL, Fs);
+        irBank(i).hrirRight = LFextension(irBank(i).hrirRight, irBank(i).winMaxR, Fs);  
+    end
+    
     
     %% cut equalized IRs
     figure('Name','raw IR truncation','NumberTitle','off','WindowStyle','docked');
@@ -265,32 +319,35 @@ function IRbank = dfeHRIRs(IRbank, dfe_enabled, plotting, save_fig_folder)
     sn = s./sum(s);
     
     % calculate average magnitude for left & right
-    Nfft = 4096;
-    mag_ir_avgL = zeros(Nfft,1);
-    mag_ir_avgR = zeros(Nfft,1);
-    
-    for i = 1:length(IRbank)  
+%     Nfft = 4096;    
+    for i = 1:length(IRbank)
+        if i == 1
+            Nfft = length(IRbank(i).hrirLeft);
+            mag_ir_avgL = zeros(Nfft,1);
+            mag_ir_avgR = zeros(Nfft,1);
+        end
         mag_ir_avgL = mag_ir_avgL + (abs(fft(IRbank(i).hrirLeft, Nfft)).^2) * sn(i);
         mag_ir_avgR = mag_ir_avgR + (abs(fft(IRbank(i).hrirRight, Nfft)).^2) * sn(i);
     end
     mag_ir_avgL = sqrt(mag_ir_avgL);
     mag_ir_avgR = sqrt(mag_ir_avgR);
 
-%     % flatten magnitude above 16kHz
-%     f = (Fs/Nfft:Fs/Nfft:Fs);
-%     mag_ir_avgL = flattenMagHF(f,mag_ir_avgL);
-%     mag_ir_avgR = flattenMagHF(f,mag_ir_avgR);
-    
     % back to time domain
     ir_avgL = ifft(mag_ir_avgL,'symmetric');
     ir_avgR = ifft(mag_ir_avgR,'symmetric');
+    ir_avgL=circshift(ir_avgL,Nfft/2,1);
+    ir_avgR=circshift(ir_avgR,Nfft/2,1);
     
-%     Nfft = 4096/2; % inv fir Nfft and filter length
-    Nfft = length(ir_avgL)/2;
+    % flatten
+    ir_avgL = flattenMagHF(ir_avgL, Fs);
+    ir_avgR = flattenMagHF(ir_avgR, Fs);
+    
+    % inv fir Nfft and filter length
+    Nfft = length(ir_avgL);
     if dfe_enabled   
         % create dfe filters
-        dfeL = invFIR('minphase', ir_avgL, Nfft, 0, Nfft, [10 Fs/2], [120 0], 1, Fs);
-        dfeR = invFIR('minphase', ir_avgR, Nfft, 0, Nfft, [10 Fs/2], [120 0], 1, Fs);
+        dfeL = invFIR('minphase', ir_avgL, Nfft, 0, Nfft, [0 Fs/2], [0 0], 1, Fs);
+        dfeR = invFIR('minphase', ir_avgR, Nfft, 0, Nfft, [0 Fs/2], [0 0], 1, Fs);
     else
         % use "flat" filters
         dfeL = [1; zeros(Nfft-1,1)];
@@ -319,19 +376,6 @@ function IRbank = dfeHRIRs(IRbank, dfe_enabled, plotting, save_fig_folder)
         IRbank(i).dfeHrirLeft = IRbank(i).dfeHrirLeft(cut_start:cut_end);
         IRbank(i).dfeHrirRight = IRbank(i).dfeHrirRight(cut_start:cut_end);
     end
-    
-%     % calculate target magnitude
-%     for i = 1:length(IRbank)
-%         for selected_channel = 1:2
-%             hrir = IRbank(i).dfehrir(:,selected_channel);
-%             Fs = IRbank(i).Fs;
-%             Nfft = size(hrir,1)*2;
-%             f = (Fs/Nfft:Fs/Nfft:Fs)';
-%             mag_target = abs(fft(hrir,Nfft));
-%             IRbank(i).f = f(1:Nfft/2);
-%             IRbank(i).mag_target(:,selected_channel) = mag_target(1:Nfft/2);
-%         end
-%     end
     
     if plotting == "true"        
         
@@ -371,7 +415,7 @@ function IRbank = dfeHRIRs(IRbank, dfe_enabled, plotting, save_fig_folder)
         plot(f,mag,'--r','LineWidth',2);
                 
         set(gca,'xscale','log')
-        xlim([100 Fs/2]);
+        xlim([10 Fs/2]);
         ylim([-20 20]);
         ylabel('Magnitude (dB)')
         xlabel('Frequency (Hz)')
@@ -414,6 +458,49 @@ function IRbank = dfeHRIRs(IRbank, dfe_enabled, plotting, save_fig_folder)
 %         xlabel('Frequency (Hz)')
 %         ylabel('Magnitude (dB)')
     end
+end
+
+function ir_fixed = flattenMagHF(ir, Fs)
+    Nfft = length(ir);
+    f = (Fs/Nfft:Fs/Nfft:Fs);
+    mag_target = abs(fft(ir, Nfft));
+    
+    % establish amplitude level
+    idmin = find(f >= 16000, 1 );           % f min
+    idmax = find(f <= 20000, 1, 'last');    % f max
+    hfext_amp = mean(mag_target(idmin:idmax));
+    
+    % define "crossover" region
+    idmin = find(f >= 18000, 1 );           % f min
+    idmax = find(f <= 20000, 1, 'last');    % f max
+    
+    % flatten above fmax
+    win = hann(2*(idmax-idmin+1));
+    win1 = win(length(win)/2+1:end);
+    win2 = win(1:length(win)/2);
+    mag_fixed = mag_target;
+    mag_fixed(idmin:idmax) = mag_target(idmin:idmax) .* win1 + hfext_amp .* win2;
+    mag_fixed(idmax+1:end) = hfext_amp;
+    
+    % back to time domain
+    ir_fixed = ifft(mag_fixed,'symmetric');
+    ir_fixed=circshift(ir_fixed,Nfft/2,1);
+%     ir_fixed=0.5*(1-cos(2*pi*(1:Nfft)'/(Nfft+1))).*ir_fixed;
+end
+
+function lfe_ir = LFextension(ir, shift,  Fs)
+    lfe_ir = zeros(length(ir),1);
+    lfe_ir(shift) = 1;
+    xfreq = 250;
+    filter_order = 2;    
+    [B_highpass, A_highpass] = butter( filter_order, xfreq/Fs*2, 'high' );            
+    [B_lowpass,  A_lowpass ] = butter( filter_order, xfreq/Fs*2, 'low'  );
+    output_low = filter(B_lowpass, A_lowpass, lfe_ir);
+    output_low = filter(B_lowpass, A_lowpass, output_low);
+    output_high = filter(B_highpass, A_highpass, ir);
+    output_high = filter(B_highpass, A_highpass, output_high);
+    
+    lfe_ir = output_low + output_high;
 end
 
 function plotMagnitudes(IRbank, type, save_fig_folder)
@@ -644,4 +731,36 @@ function saveAsSofa(IRbank, subjectdir)
     SOFAfn=fullfile(subjectdir,'xr-hrtf.sofa');
     disp(['Saving:  ' SOFAfn]);
     SOFAsave(SOFAfn, Obj, compression);
+end
+
+function plotAzEl(az,el,val, lim)
+    azimuth = -180:1:180;
+    elevation = -90:1:90;
+    
+    % get absolute val
+%     val = abs(val);
+
+    for i = 1:length(azimuth)
+        for j = 1:length(elevation)
+            dist = distance(elevation(j),azimuth(i),el,az);
+            idx = find(dist == min(dist));
+            if length(idx) > 1
+                value(j,i) = median(val(idx));
+            else
+                value(j,i) = val(idx);
+            end
+
+        end    
+    end
+
+    s = pcolor(azimuth,elevation,value);
+    s.EdgeColor = 'none';
+    xlim([-180 180])
+    ylim([-90 90])
+    zlim(lim)
+    caxis(lim)
+    xlabel('Azimuth (deg)')
+    ylabel('Elevation (deg)')
+%     title('MFSD')
+    colorbar
 end

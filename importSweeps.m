@@ -1,11 +1,12 @@
 close all
 clear
 
-% subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/';
-% subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
-% subjectdir = 'data/20211012-q2_tr/';
-% subjectdir = 'data/20211104-q2_tr/';
-subjectdir = 'data/20211105-A/';
+% subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/'; inv_pol = true;
+% subjectdir = 'data/20201217-122pt-2.5m-canford_vt/'; inv_pol = true;
+% subjectdir = 'data/20211012-q2_tr/'; inv_pol = true;
+% subjectdir = 'data/20211105-A-Jan/'; inv_pol = true;
+subjectdir = 'data/20211126-TR/'; inv_pol = false;
+% subjectdir = 'data/20211126-Gavin/'; inv_pol = false;
 
 sweepdir = [subjectdir 'sweeps/'];
 [y_inv_sweep, Fs] = audioread([sweepdir 'ZZ_inv_sweep.wav']);
@@ -16,6 +17,10 @@ filelist = [filelist; dir([sweepdir '00_reference.wav'])];
 for i = 1:length(filelist)
     [sweepBank(i).y, sweepBank(i).Fs] = audioread([filelist(i).folder '/' filelist(i).name]);
     sweepBank(i).name = filelist(i).name;
+    
+    if inv_pol
+        sweepBank(i).y = -sweepBank(i).y;
+    end
 end
 
 for i = 1:length(sweepBank)
