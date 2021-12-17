@@ -6,7 +6,8 @@ clear
 % for i = 1:length(dirlist)
 %     subjectdir = [dirlist(i).folder '/' dirlist(i).name '/']; inv_pol = false;
 %     irBank = extractRigIRs(subjectdir,inv_pol,false);
-%     irBank = normalizeRMS(irBank);
+%     irBank = adjustGains(irBank,-18,-30);
+%     irBank = normalizePeak(irBank);
 %     plotAndSave(subjectdir,irBank);
 % end
 
@@ -15,10 +16,10 @@ clear
 % subjectdir = 'data/20201217-122pt-2.5m-canford_vt/'; inv_pol = true;
 % subjectdir = 'data/20211012-q2_tr/'; inv_pol = true;
 % subjectdir = 'data/20211105-A-Jan/'; inv_pol = true;
-subjectdir = 'data/20211126-XR-TR/'; inv_pol = false;
-% subjectdir = 'data/20211126-XR-Gavin/'; inv_pol = false;
+% subjectdir = 'data/20211126-XR-TR/'; inv_pol = false;
+subjectdir = 'data/20211126-XR-Gavin/'; inv_pol = false;
 irBank = extractXrIRs(subjectdir,inv_pol);
-% irBank = normalizeRMS(irBank);
+irBank = normalizePeak(irBank);
 plotAndSave(subjectdir,irBank);
 
 function irBank = extractRigIRs(subjectdir,inv_pol,plotting)
@@ -148,23 +149,24 @@ function ir = deconvolve(sweep,inv_sweep)
     end
 end
 
-function irBank = normalizeRMS(irBank)
-%     ref_rms = [];
-%     ear_rms = [];
-%     for i = 1:length(irBank)
-%         if irBank(i).ref
-%             ref_rms = [ref_rms; rms([irBank(i).fullIrLeft irBank(i).fullIrRight])];
-%         else
-%             ear_rms = [ear_rms; rms([irBank(i).fullIrLeft irBank(i).fullIrRight])];
-%         end
-%     end
-%     
-%     ear_rms_avg = rms(ear_rms,'all');
-%     ref_rms_avg = rms(ref_rms,'all');
-%     disp(['ear rms: ' num2str(rms(ear_rms,'all'))]);
-%     disp(['ref rms: ' num2str(rms(ref_rms,'all'))]);
-    ear_gain = 10^(-18/20);
-    ref_gain = 10^(-30/20);
+function irBank = normalizePeak(irBank)
+    max_val = [];
+    
+    for i = 1:length(irBank)
+        max_val = [max_val; max(max(abs(irBank(i).fullIR)))];
+    end
+    
+    max_val = max(max_val);
+
+    for i = 1:length(irBank)
+        irBank(i).fullIR = irBank(i).fullIR ./ max_val;
+
+    end
+end
+
+function irBank = adjustGains(irBank,ear_dB,ref_dB)
+    ear_gain = 10^(ear_dB/20);
+    ref_gain = 10^(ref_dB/20);
     
     for i = 1:length(irBank)
         if irBank(i).ref

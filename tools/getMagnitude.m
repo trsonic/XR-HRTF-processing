@@ -1,7 +1,7 @@
 function [f,mag] = getMagnitude(ir,Fs,linlog)
     Nfft = length(ir);
-    f = (Fs/Nfft:Fs/Nfft:Fs)';
-   
+%     f = (Fs/Nfft:Fs/Nfft:Fs)';
+    f = (0:Nfft-1)*Fs/Nfft;
     mag = abs(fft(ir, Nfft));
     
     if strcmp(linlog,'log')

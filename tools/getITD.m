@@ -1,14 +1,17 @@
 function [ITD, maxL, maxR] = getITD(irLeft, irRight, Fs)
 
-    % filter
-    xfreq = 1500;
-    filter_order = 2;    
-    [B,  A ] = butter( filter_order, xfreq/Fs*2, 'low'  );
+    fx = 1500/(Fs/2);
+    f = [0 fx fx 1];
+    mhi = [1 1 0 0];
+    B = fir2(8,f,mhi);
+    A = 1;
     irLeft = filter(B, A, irLeft);
     irRight = filter(B, A, irRight);
-    irLeft = filter(B, A, irLeft);
-    irRight = filter(B, A, irRight);
+    gd = grpdelay(B,A);
+    filter_dly = median(gd(1:end/2));
+%     filter_dly = 0;
 
+    
     % find peak value and use windowing to cut off strong room
     % reflections in the contralateral ear
     [~,miridx_left] = max(abs(irLeft));
@@ -34,8 +37,8 @@ function [ITD, maxL, maxR] = getITD(irLeft, irRight, Fs)
     dly_smp_right = lag(indexR);
 
     ITD = (dly_smp_right - dly_smp_left) * 10^6 / (Fs*r);
-    maxL = winstart-1 + round(dly_smp_left / r);
-    maxR = winstart-1 + round(dly_smp_right / r);
+    maxL = winstart-1 + round(dly_smp_left / r) - filter_dly;
+    maxR = winstart-1 + round(dly_smp_right / r) - filter_dly;
 
     if ITD > 1000
         figure('Name','ITD debug','NumberTitle','off','WindowStyle','docked')
