@@ -6,7 +6,7 @@ addpath('../API_MO/API_MO/')
 addpath('tools/TriangleRayIntersection/')
 SOFAstart;
 
-subjectdir = 'data/20211126-TR/';
+subjectdir = 'data/20211126-XR-TR/';
 sofafile = [subjectdir 'xr-hrtf.sofa'];
 
 %% load sofa file

@@ -6,39 +6,54 @@ addpath('tools/invFIR/')
 addpath('tools/VoronoiSphere/')
 addpath('../API_MO/API_MO/')
 
-% subjectdir = 'data/20210923-RIG-KEMAR-NOHMD/';
+dirlist = dir('data/*');
+% key = '-RIG-'; % for KEMAR measurements done in the rig
+% key = '20210923-RIG-KEMAR-NOHMD';
+% key = '20201217-122pt-2.5m-dayton_vt';
+% key = '20201217-122pt-2.5m-canford_vt';
+% key = '20211012-q2_tr';
+% key = '20211105-A-Jan';
+% key = '20211126-XR-TR';
+key = '20211126-XR-Gavin';
 
-% subjectdir = 'data/20201217-122pt-2.5m-dayton_vt/';
-% subjectdir = 'data/20201217-122pt-2.5m-canford_vt/';
-% subjectdir = 'data/20211012-q2_tr/';
-% subjectdir = 'data/20211105-A-Jan/';
-subjectdir = 'data/20211126-XR-TR/';
-% subjectdir = 'data/20211126-XR-Gavin/';
+% filter directories
+idx = [];
+for i = 1:length(dirlist)
+    if contains(dirlist(i).name,key)
+        idx = [idx i];
+    end
+end
+dirlist = dirlist(idx);
 
-load([subjectdir 'irBank.mat'])
-mkdir([subjectdir 'figures/'])
-% plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
+for i = 1:length(dirlist)
+    subjectdir = [dirlist(i).folder '/' dirlist(i).name '/'];
+    load([subjectdir 'irBank.mat'])
+    mkdir([subjectdir 'figures/'])
+    plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
 
-% time domain windowing
-plotting = 'false';
-irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
-% plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
+    % time domain windowing
+    plotting = 'false';
+    irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
+    plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
 
-% calculate FF measurement inv filter and normalize all hrirs
-% do the low-frequency extension
-irBank = normalizeIRs(irBank, 'true');
-plotMagnitudes(irBank, '3-raw', [subjectdir 'figures/'])
+    % calculate FF measurement inv filter and normalize all hrirs
+    % do the low-frequency extension
+    irBank = normalizeIRs(irBank, 'true');
+    plotMagnitudes(irBank, '3-raw', [subjectdir 'figures/'])
 
-% diffuse-field equalization
-dfe_enabled = true;
-irBank = dfeHRIRs(irBank, dfe_enabled, 'true', [subjectdir 'figures/']);
-plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
+    % diffuse-field equalization
+    dfe_enabled = true;
+    irBank = dfeHRIRs(irBank, dfe_enabled, 'true', [subjectdir 'figures/']);
+    plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
 
-% save ambix config file
-saveAsAmbix(irBank, subjectdir)
+    % save ambix config file
+    saveAsAmbix(irBank, subjectdir)
 
-% save sofa file
-saveAsSofa(irBank, subjectdir)
+    % save sofa file
+    saveAsSofa(irBank, subjectdir)
+    
+    save([subjectdir 'irBankProcessed.mat'], 'irBank')
+end
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     % define window
@@ -54,7 +69,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
         irLeft = [zeros(Nwin,1); IRbank(i).fullIR(:,1);];
         irRight = [zeros(Nwin,1); IRbank(i).fullIR(:,2);];
         Fs = IRbank(i).Fs;
-        [IRbank(i).ITD, maxL, maxR] = getITD(irLeft,irRight,Fs);
+        [IRbank(i).ITD,maxL,maxR,IRbank(i).dlyL,IRbank(i).dlyR] = getITD(irLeft,irRight,Fs);
 
         % apply window
         winstart = maxL - winshift;
@@ -191,8 +206,8 @@ function irBank = normalizeIRs(irBank, plotting)
     % find the free-field measurements and calculate inverse filters
     for i = find([irBank.ref])
         Fs = irBank(i).Fs;
-        irBank(i).invh(:,1) = createInverseFilter(irBank(i).winIR(:,1), Fs);
-        irBank(i).invh(:,2) = createInverseFilter(irBank(i).winIR(:,2), Fs);
+        irBank(i).invh(:,1) = createInverseFilter(irBank(i).winIR(:,1), Fs, 12);
+        irBank(i).invh(:,2) = createInverseFilter(irBank(i).winIR(:,2), Fs, 12);
     end
     
     if strcmp(plotting,'true')
@@ -316,8 +331,8 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
     Nfft = length(ir_avgL);
     if dfe_enabled   
         % create dfe filters
-        dfeL = createInverseFilter(ir_avgL, Fs);
-        dfeR = createInverseFilter(ir_avgR, Fs);
+        dfeL = createInverseFilter(ir_avgL, Fs, 12);
+        dfeR = createInverseFilter(ir_avgR, Fs, 12);
     else
         % use "flat" filters
         dfeL = [1; zeros(Nfft-1,1)];
@@ -428,17 +443,9 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
 end
 
 function lfe_h = LFextension(h, shift,  Fs)
-
-    
-%     [gd,f] = grpdelay(h,1,128,Fs);
-%     [~,idx] = min(abs(f-xfreq));
-%     shiftgd = round(mean(gd));
-%     figure
-%     semilogx(f,gd)
-
     lfe_h = zeros(length(h),1);
     lfe_h(shift) = 1;
-    disp(shift);
+%     disp(shift);
     xfreq = 250;
     filter_order = 2;    
     [B_highpass, A_highpass] = butter( filter_order, xfreq/Fs*2, 'high' );            
@@ -452,7 +459,7 @@ function lfe_h = LFextension(h, shift,  Fs)
 end
 
 function plotMagnitudes(irBank, type, save_fig_folder)
-    plots_num = 50;
+    plots_num = 51;
     fig_num = ceil(length(irBank)/plots_num);
 
     for i = 1:fig_num

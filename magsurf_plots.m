@@ -7,7 +7,7 @@ SOFAstart;
 
 % sofafile = 'data/20201217-122pt-2.5m-dayton_vt/xr_122pt.sofa';
 % sofafile = 'data/20211012-q2_tr/xr-hrtf.sofa';
-sofafile = 'data/20211126-TR/xr-hrtf.sofa';
+sofafile = 'data/20211126-XR-TR/xr-hrtf.sofa';
 
 
 %% load sofa file
@@ -77,7 +77,7 @@ magsurf(hrirBank(idx).Fs,el,right_hrirs,'Elevation (deg)','Frontal plane - right
 
 function magsurf(Fs,ang,hrir,ytit,tit,zlimit)
     Nfft = 1024;
-    f = (Fs/Nfft:Fs/Nfft:Fs)';
+    f = ((0:Nfft-1)*Fs/Nfft)';
     magnitude = abs(fft(hrir,Nfft));
     magnitude = 20*log10(magnitude);
     s = pcolor(f,ang,magnitude');

@@ -1,4 +1,4 @@
-function [ITD, maxL, maxR] = getITD(irLeft, irRight, Fs)
+function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
 
     fx = 1500/(Fs/2);
     f = [0 fx fx 1];
@@ -39,6 +39,8 @@ function [ITD, maxL, maxR] = getITD(irLeft, irRight, Fs)
     ITD = (dly_smp_right - dly_smp_left) * 10^6 / (Fs*r);
     maxL = winstart-1 + round(dly_smp_left / r) - filter_dly;
     maxR = winstart-1 + round(dly_smp_right / r) - filter_dly;
+    dlyL = (dly_smp_left / r + (winstart-1 - filter_dly)) * 10^6 / Fs;
+    dlyR = (dly_smp_right / r + (winstart-1 - filter_dly)) * 10^6 / Fs;
 
     if ITD > 1000
         figure('Name','ITD debug','NumberTitle','off','WindowStyle','docked')

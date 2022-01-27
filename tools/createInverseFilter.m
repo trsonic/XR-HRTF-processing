@@ -1,5 +1,5 @@
 % TR's version of the inverse filtering function
-function invh_minph = createInverseFilter(h,Fs)
+function invh_minph = createInverseFilter(h,Fs,Noct)
     disp(['length: ' num2str(length(h)) ', Fs: ' num2str(Fs)])
     
     Nfft = length(h);
@@ -9,9 +9,13 @@ function invh_minph = createInverseFilter(h,Fs)
     H_reg = flattenMagHF(H,Fs);
     
     %% freq-domain smoothing if necessary...
+    freq = ((0:Nfft-1)*Fs/Nfft)';
+    H_sm = smoothSpectrum(H_reg(1:end/2),freq(1:end/2),Noct);
+    H_sm = [H_sm; fliplr(H_sm')'];
     
     %% calculate inverse filter
-    iH=conj(H_reg)./(conj(H_reg).*H_reg);
+    iH=conj(H_sm)./(conj(H_sm).*H_sm);
+%     iH=conj(H_reg)./(conj(H_reg).*H_reg);
 %     iH=conj(H)./((conj(H).*H)+(conj(B).*B)); % calculating regulated spectral inverse
     invh=circshift(ifft(iH,'symmetric'),Nfft/2);
     
@@ -23,22 +27,22 @@ function invh_minph = createInverseFilter(h,Fs)
     %% get minimum phase inv h
     invh_minph = minph(invh);
     
-    %% PLOTTING
-    figure('Name','Inverse Filter','NumberTitle','off','WindowStyle','docked');
-    tiledlayout(1,2)
-    nexttile
-    hold on
-    box on
-    plot(h)
-    plot(invh-10)
-    plot(invh_minph-20)
-
-    nexttile
-    hold on
-    box on
-    plot(20*log10(H))
-    plot(20*log10(H_reg))
-    plot(20*log10(iH))
+%     %% PLOTTING
+%     figure('Name','Inverse Filter','NumberTitle','off','WindowStyle','docked');
+%     tiledlayout(1,2)
+%     nexttile
+%     hold on
+%     box on
+%     plot(h)
+%     plot(invh-10)
+%     plot(invh_minph-20)
+% 
+%     nexttile
+%     hold on
+%     box on
+%     plot(20*log10(H))
+%     plot(20*log10(H_reg))
+%     plot(20*log10(iH))
     
     % calculate minimum phase component of impulse response
     function [h_min] = minph(h)
