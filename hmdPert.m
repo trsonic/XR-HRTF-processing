@@ -48,31 +48,38 @@ IRb_Q2HMD = IRbank(getIdx(IRbank,'hmd','Q2HMD'));
 IRb_MLHMD = IRbank(getIdx(IRbank,'hmd','MLHMD'));
 IRb_TRHAT = IRbank(getIdx(IRbank,'hmd','TRHAT'));
 
-%% calculate TOD difference for Quest
+%% calculate TOA and magnitude difference for Quest
 model=struct;
 for i = 1:size(IRb_Q2HMD,2)
     model(i).azi = IRb_Q2HMD(i).azimuth;
     model(i).ele = IRb_Q2HMD(i).elevation;
     model(i).dtoa_diff = (IRb_Q2HMD(i).dly-(IRb_NOHMD(i).dly+IRb_NOHMD2(i).dly)/2)';
-%     model(i).mag_diff = (IRb_Q2HMD(i).mag-(IRb_NOHMD(i).mag+IRb_NOHMD2(i).mag)/2)'; %%%%%
-    model(i).mag_diff = (IRb_Q2HMD(i).mag ./ sqrt(IRb_NOHMD(i).mag.^2+IRb_NOHMD2(i).mag.^2))';    
+%     model(i).mag_diff = (IRb_Q2HMD(i).mag-(IRb_NOHMD(i).mag+IRb_NOHMD2(i).mag)/2)';
+%     model(i).mag_diff = (IRb_Q2HMD(i).mag ./ sqrt(IRb_NOHMD(i).mag.^2+IRb_NOHMD2(i).mag.^2))';
+    model(i).mag_diff = IRb_Q2HMD(i).mag ./ sqrt(0.5*IRb_NOHMD(i).mag.^2+0.5*IRb_NOHMD2(i).mag.^2);    
     model(i).f = IRb_Q2HMD(i).f;
 end
 
-
-ls = getLebedevSphere(4334);
+%% interpolate these differences using gaussian smoothing 
+% ls = getLebedevSphere(4334);
+ls = getLebedevSphere(50);
 dirs = [];
 [dirs(:,1), dirs(:,2), ~] = cart2sph(ls.x,ls.y,ls.z);
 dirs = rad2deg(dirs);
-% [model.azi] = dirs(:,1);
-% model.ele = dirs(:,2)';
 
 % gaussian window
-sigma = 5;
+sigma = 10;
 pd = makedist('Normal','mu',0,'sigma',sigma);
-% plot(pdf(pd,linspace(0,180,180)))
+figure('Name','smoothing window','NumberTitle','off','WindowStyle','docked');
 
+distvec = 0:0.25:180;
+plot(distvec,pdf(pd,distvec))
+% ylim([0 1])
+xlim([0 60])
+ylabel('Weighting')
+xlabel('Angular Distance (deg)')
 
+% create struct with interpolated values
 model_interp = struct;
 for i = 1:size(dirs,1)
     model_interp(i).az = dirs(i,1);
@@ -99,43 +106,66 @@ for i = 1:size(dirs,1)
     model_interp(i).mag_diff_mf = mag_diff_mf;
 end
 
-
-
-
-% %% plot quest TOA difference interpolated
-% figure('Name','TOA difference','NumberTitle','off','WindowStyle','docked');
-% % tiledlayout(2,2)
-% lim = [-20 80];
-% nexttile
-% hold on
-% title('quest TOA difference interpolated')
-% plotAzEl([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim)
-% 
-% 
-% %% plot quest magnitude difference interpolated
-% figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
-% % tiledlayout(2,2)
-% lim = [-12 12];
-% nexttile
-% hold on
-% title('quest magnitude difference interpolated')
-% plotAzEl([model_interp.az],[model_interp.el],[model_interp.mag_diff_mf],lim)
+%% plot quest TOA difference interpolated
+figure('Name','TOA difference','NumberTitle','off','WindowStyle','docked');
+lim = [-20 80];
+nexttile
+hold on
+title('quest TOA difference interpolated')
+plotAzEl([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim)
 
 
 %% plot quest magnitude difference interpolated
 figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
+lim = [-12 12];
 hold on
+title('quest magnitude difference interpolated')
+plotAzEl([model_interp.az],[model_interp.el],[model_interp.mag_diff_mf],lim)
+
+
+%% CREATE INVERSE FILTERS
+
+%% plot quest magnitude difference interpolated
+figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
+
+
 
 for i = 1:size(model_interp,2)
-	plot(model_interp(i).f,20*log10(model_interp(i).mag_diff));
+    f = model_interp(i).f;
+    H = model_interp(i).mag_diff;
+    
+    H_sm = smoothSpectrum(H(1:end/2),f(1:end/2),3);
+    H_sm = [H_sm; fliplr(H_sm')'];
+    
+    iH = conj(H_sm)./(conj(H_sm).*H_sm);
+    invh = circshift(ifft(iH,'symmetric'),length(iH)/2);
+    invh = minph(invh);
+    
+    subplot(2,1,1)
+    hold on
+
+% 	plot(f,20*log10(H))
+%     plot(f,20*log10(H_sm))
+    plot(f,20*log10(iH))
+    
+    set(gca,'xscale','log')
+    grid on
+    xlim([10 24000])
+    ylim([-12 12])
+    
+    subplot(2,1,2)
+    hold on
+    plot(invh)
+    
+    model_interp(i).invh = invh;
+%     subplot(3,1,3)
+%     freqz(invh,0:100:24000,48000)
+    
 end
 
-set(gca,'xscale','log')
-grid on
-xlim([10 24000]);
+save('data/model_interp.mat', 'model_interp')
 
-
-
+%% RAW MEASUREMENT DATA (NOT USED)
 %% plot TOA difference
 figure('Name','TOA difference','NumberTitle','off','WindowStyle','docked');
 tiledlayout(2,2)
@@ -242,7 +272,7 @@ title('Woolen hat')
 
 %% functions
 function val = clipValues(val)
-    val(abs(val) < 15) = 0;
+%     val(abs(val) < 15) = 0;
 end
 
 function idx = getIdx(IRbank,cat,key)

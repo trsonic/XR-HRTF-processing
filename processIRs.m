@@ -13,8 +13,8 @@ dirlist = dir('data/*');
 % key = '20201217-122pt-2.5m-canford_vt';
 % key = '20211012-q2_tr';
 % key = '20211105-A-Jan';
-% key = '20211126-XR-TR';
-key = '20211126-XR-Gavin';
+key = '20211126-XR-TR';
+% key = '20211126-XR-Gavin';
 
 % filter directories
 idx = [];
@@ -30,6 +30,9 @@ for i = 1:length(dirlist)
     load([subjectdir 'irBank.mat'])
     mkdir([subjectdir 'figures/'])
     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
+    
+    % HMD influence correction(ITD and magnitude)
+    irBank = hmdCorrection(irBank);
 
     % time domain windowing
     plotting = 'false';
@@ -53,6 +56,38 @@ for i = 1:length(dirlist)
     saveAsSofa(irBank, subjectdir)
     
     save([subjectdir 'irBankProcessed.mat'], 'irBank')
+end
+
+function irBank = hmdCorrection(irBank)
+    load('data/model_interp.mat')
+    
+    for i = 1:length(irBank)
+        if irBank(i).ref == 0
+            dist = distance(irBank(i).elevation,irBank(i).azimuth,[model_interp.el],[model_interp.az]);
+            [~,idxl] = min(dist);
+            dist = distance(irBank(i).elevation,irBank(i).azimuth,[model_interp.el],-[model_interp.az]);
+            [~,idxr] = min(dist);
+            
+            % correct magnitude
+            left = irBank(i).fullIR(:,1);
+            right = irBank(i).fullIR(:,2);
+            left = conv(model_interp(idxl).invh,left);
+            right = conv(model_interp(idxr).invh,right); 
+
+            % correct time of arrival
+            dly = model_interp(idxl).dtoa_diff;
+            shift = -1 * dly * 10^-6 * irBank(i).Fs;
+            left = fraccircshift(left,shift);
+%             disp(shift)
+            
+            dly = model_interp(idxr).dtoa_diff;
+            shift = -1 * dly * 10^-6 * irBank(i).Fs;
+            right = fraccircshift(right,shift);
+%             disp(shift)
+                  
+            irBank(i).fullIR = [left right];    
+        end
+    end
 end
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
