@@ -1,12 +1,26 @@
 % TR's version of the inverse filtering function
-function invh_minph = createInverseFilter(h,Fs,Noct)
-    disp(['length: ' num2str(length(h)) ', Fs: ' num2str(Fs)])
+function invh_minph = createInverseFilter(h,Fs,Noct,lfefreq)
+
+%     if exist('input_type', 'var')
+%         if strcmp(input_type,'h')
+%             Nfft = length(h);
+%             H=abs(fft(h,Nfft));
+%         elseif strcmp(input_type,'H')
+%             Nfft = length(h);
+%             H=h;
+%         end
+%     else
+%         Nfft = length(h);
+%         H=abs(fft(h,Nfft));
+%     end
     
     Nfft = length(h);
     H=abs(fft(h,Nfft));
+
+    disp(['length: ' num2str(length(h)) ', Fs: ' num2str(Fs)])
     
     %% regularization
-    H_reg = flattenMagHF(H,Fs);
+    H_reg = flattenMagHF(H,Fs, lfefreq);
     
     %% freq-domain smoothing if necessary...
     freq = ((0:Nfft-1)*Fs/Nfft)';
@@ -44,22 +58,16 @@ function invh_minph = createInverseFilter(h,Fs,Noct)
 %     plot(20*log10(H_reg))
 %     plot(20*log10(iH))
     
-    % calculate minimum phase component of impulse response
-    function [h_min] = minph(h)
-        n = length(h);
-        h_cep = real(ifft(log(abs(fft(h(:,1))))));
-        odd = fix(rem(n,2));
-        wn = [1; 2*ones((n+odd)/2-1,1) ; ones(1-rem(n,2),1); zeros((n+odd)/2-1,1)];
-        h_min = zeros(size(h(:,1)));
-        h_min(:) = real(ifft(exp(fft(wn.*h_cep(:)))));
-    end
 
-    function H_fixed = flattenMagHF(H,Fs)
+
+    function H_fixed = flattenMagHF(H,Fs, lfefreq)
         f = (0:length(H)-1)*Fs/length(H);
         
-        % establish amplitude level at hf
-        idmin = find(f >= 60, 1 );           % f min
-        idmax = find(f <= 300, 1, 'last');    % f max
+        % establish amplitude level at lf
+        idmin = find(f >= lfefreq(1), 1 );           % f min
+        idmax = find(f <= lfefreq(2), 1, 'last');    % f max
+%         idmin = find(f >= 60, 1 );           % f min
+%         idmax = find(f <= 300, 1, 'last');    % f max
         lfext_amp = 10^(mean(20*log10(H(idmin:idmax)))/20);
         lfext_smp = idmax;
 

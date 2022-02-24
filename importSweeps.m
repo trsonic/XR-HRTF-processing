@@ -17,10 +17,14 @@ clear
 % subjectdir = 'data/20211012-q2_tr/'; inv_pol = true;
 % subjectdir = 'data/20211105-A-Jan/'; inv_pol = true;
 % subjectdir = 'data/20211126-XR-TR/'; inv_pol = false;
-subjectdir = 'data/20211126-XR-Gavin/'; inv_pol = false;
-irBank = extractXrIRs(subjectdir,inv_pol);
+% subjectdir = 'data/20211126-XR-Gavin/'; inv_pol = false;
+subjectdir = 'data/20220223-XR-TR_median/'; inv_pol = false;
+
+
+[irBank, hpirBank] = extractXrIRs(subjectdir,inv_pol);
 irBank = normalizePeak(irBank);
-plotAndSave(subjectdir,irBank);
+hpirBank = normalizePeak(hpirBank);
+plotAndSave(subjectdir,irBank,hpirBank);
 
 function irBank = extractRigIRs(subjectdir,inv_pol,plotting)
     sweepdir = [subjectdir 'sweeps/'];
@@ -99,45 +103,67 @@ function irBank = extractRigIRs(subjectdir,inv_pol,plotting)
     end
 end
 
-function irBank = extractXrIRs(subjectdir,inv_pol)
+function [irBank, hpirBank] = extractXrIRs(subjectdir,inv_pol)
     sweepdir = [subjectdir 'sweeps/'];
-    [y_inv_sweep, Fs] = audioread([sweepdir 'ZZ_inv_sweep.wav']);
-
-    filelist = dir([sweepdir '*_azi_*.wav']);
-    filelist = [filelist; dir([sweepdir '00_reference.wav'])];
     
-    sweepBank = struct;
+    %% HRIRS + reference
+    [y_inv_sweep, Fs] = audioread([sweepdir 'LS_inv_sweep.wav']);
+    filelist = dir([sweepdir '*_measured_*.wav']);
+    filelist = [filelist; dir([sweepdir '00_reference_01.wav'])];
+    
+    irBank = struct;
     for i = 1:length(filelist)
-        [sweepBank(i).y, sweepBank(i).Fs] = audioread([filelist(i).folder '/' filelist(i).name]);
-        sweepBank(i).name = filelist(i).name;
+        [irBank(i).y, irBank(i).Fs] = audioread([filelist(i).folder '/' filelist(i).name]);
+        irBank(i).name = filelist(i).name;
 
         if inv_pol
-            sweepBank(i).y = -sweepBank(i).y;
+            irBank(i).y = -irBank(i).y;
         end
-    end
+        name = extractAfter(irBank(i).name,'target');
+        irBank(i).azimuth = str2double(extractBefore(extractAfter(name,'_az_'),'_el_'));
+        irBank(i).elevation = str2double(extractBefore(extractAfter(name,'_el_'),'_dist_'));
+        name = extractAfter(irBank(i).name,'measured');
+        irBank(i).distance = str2double(extractBefore(extractAfter(name,'_dist_'),'.wav'));
 
-    irBank = struct;
-    for i = 1:length(sweepBank)
-        irBank(i).azimuth = str2double(extractBefore(extractAfter(sweepBank(i).name,'_azi_'),'_ele_'));
-        irBank(i).elevation = str2double(extractBefore(extractAfter(sweepBank(i).name,'_ele_'),'_dist_'));
-        irBank(i).distance = str2double(extractBefore(extractAfter(sweepBank(i).name,'_dist_'),'.wav'));
-        irBank(i).Fs = sweepBank(i).Fs;
-        irBank(i).name = sweepBank(i).name;
-        if contains(sweepBank(i).name,'reference','IgnoreCase',true)
+        if contains(irBank(i).name,'reference','IgnoreCase',true)
             irBank(i).ref = true;
         else
             irBank(i).ref = false;
         end
         irBank(i).lspk = 1;
         
-        fullIr = deconvolve(sweepBank(i).y,y_inv_sweep);
+        if irBank(i).Fs ~= Fs
+            disp('Fs mismatch!!!')
+        end
+        irBank(i).fullIR = deconvolve(irBank(i).y,y_inv_sweep);
         
         % skip the first half of the ir
-        cut_start = floor(size(fullIr,1)/2);
+        cut_start = floor(size(irBank(i).fullIR,1)/2);
         cut_end = cut_start + 8191;
-        irBank(i).fullIR = fullIr(cut_start:cut_end,:);
-        
+        irBank(i).fullIR = irBank(i).fullIR(cut_start:cut_end,:);
     end
+    irBank = rmfield(irBank, 'y');
+    
+    % HpTF
+    [y_inv_sweep, Fs] = audioread([sweepdir 'HP_inv_sweep.wav']);
+    filelist = dir([sweepdir '00_hptf_*.wav']);
+    
+    hpirBank = struct;
+    for i = 1:length(filelist)
+        [hpirBank(i).y, hpirBank(i).Fs] = audioread([filelist(i).folder '/' filelist(i).name]);
+        hpirBank(i).name = filelist(i).name;
+        if hpirBank(i).Fs ~= Fs
+            disp('Fs mismatch!!!')
+        end
+        hpirBank(i).fullIR = deconvolve(hpirBank(i).y,y_inv_sweep);
+        
+        % skip the first half of the ir
+        cut_start = floor(size(hpirBank(i).fullIR,1)/2);
+        cut_end = cut_start + 8191;
+        hpirBank(i).fullIR = hpirBank(i).fullIR(cut_start:cut_end,:);
+    end
+    hpirBank = rmfield(hpirBank, 'y');
+    
 end
 
 function ir = deconvolve(sweep,inv_sweep)
@@ -177,7 +203,7 @@ function irBank = adjustGains(irBank,ear_dB,ref_dB)
     end
 end
 
-function plotAndSave(subjectdir,irBank)
+function plotAndSave(subjectdir,irBank, hpirBank)
     figure('Name','Measured IRs','NumberTitle','off','WindowStyle','docked');
     hold on
     % xlim([0 5000])
@@ -187,7 +213,18 @@ function plotAndSave(subjectdir,irBank)
             plot(irBank(i).fullIR(:,2), '-r')
         end
     end
+    
+    figure('Name','Measured IRs','NumberTitle','off','WindowStyle','docked');
+    hold on
+    % xlim([0 5000])
+    for i = 1:length(hpirBank)
+        plot(hpirBank(i).fullIR(:,1), '-g')
+        if size(hpirBank(i).fullIR,2) == 2
+            plot(hpirBank(i).fullIR(:,2), '-r')
+        end
+    end
 
-    save([subjectdir 'irBank.mat'], 'irBank')
+
+    save([subjectdir 'irBank.mat'], 'irBank', 'hpirBank')
 end
 

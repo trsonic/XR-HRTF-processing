@@ -13,5 +13,5 @@ Fs = irBank(51).Fs;
 
 h = h/max(abs(h));
 
-invh = createInverseFilter(h,Fs);
+invh = createInverseFilter(h,Fs,3,'h');
 

@@ -7,7 +7,8 @@ SOFAstart;
 
 % sofafile = 'data/20201217-122pt-2.5m-dayton_vt/xr_122pt.sofa';
 % sofafile = 'data/20211012-q2_tr/xr-hrtf.sofa';
-sofafile = 'data/20211126-XR-TR/xr-hrtf.sofa';
+sofafile = 'data/20211126-XR-TR/xr-hrtf-raw.sofa';
+% sofafile = 'data/20220223-XR-TR_median/xr-hrtf-raw.sofa';
 
 
 %% load sofa file
@@ -17,7 +18,6 @@ apparentSourceVector = SOFAcalculateAPV(hrtf); % Calculate the source position f
 for i = 1:length(apparentSourceVector)
     hrirBank(i).azimuth = apparentSourceVector(i,1);
     hrirBank(i).elevation = apparentSourceVector(i,2);
-%     hrirBank(i).rawhrir = squeeze(hrtf.Data.IR(i,:,:))';
     hrirBank(i).left_hrir = squeeze(hrtf.Data.IR(i,1,:))';
     hrirBank(i).right_hrir = squeeze(hrtf.Data.IR(i,2,:))';
     hrirBank(i).Fs = hrtf.Data.SamplingRate;        
@@ -28,6 +28,22 @@ end
 hrirBank = hrirBank(idx);
 
 %% plot surface plots
+figure('Name','Surf plots','NumberTitle','off','WindowStyle','docked')
+% median plane
+az = 0;
+el = -180:1:180;
+for i = 1:length(el)
+    dist = distance([hrirBank.elevation], [hrirBank.azimuth], el(i), az);
+    [~, idx] = min(dist);
+    left_hrirs(:,i) = hrirBank(idx).left_hrir;
+    right_hrirs(:,i) = hrirBank(idx).right_hrir;
+end
+nexttile
+magsurf(hrirBank(idx).Fs,el,left_hrirs,'Elevation (deg)','Median plane - left ear',[-40 20])
+nexttile
+magsurf(hrirBank(idx).Fs,el,right_hrirs,'Elevation (deg)','Median plane - right ear',[-40 20])
+
+
 figure('Name','Surf plots','NumberTitle','off','WindowStyle','docked')
 tiledlayout(3,2)
 

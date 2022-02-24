@@ -1,3 +1,5 @@
+% get ITD, direct sound sample indices, and direct sound delay
+
 function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
 
     fx = 1500/(Fs/2);
@@ -11,15 +13,33 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
     filter_dly = median(gd(1:end/2));
 %     filter_dly = 0;
 
-    
     % find peak value and use windowing to cut off strong room
     % reflections in the contralateral ear
     [~,miridx_left] = max(abs(irLeft));
     [~,miridx_right] = max(abs(irRight));
-
+    
     peakidx = min(miridx_left,miridx_right);
     winstart = peakidx-(Fs*0.0005);
-    winend = peakidx+(Fs*0.003);
+    winend = peakidx+(Fs*0.002);
+    
+%     if true
+%         figure('Name','ITD debug','NumberTitle','off','WindowStyle','docked')
+%         subplot(2,1,1)
+%         hold on
+%         plot(irLeft)
+%         xline(peakidx,'--r')
+%         xline(winstart,'--k')
+%         xline(winend,'--k')
+%         xlim([peakidx - 300 peakidx + 300])
+% 
+%         subplot(2,1,2)
+%         hold on
+%         plot(irRight)
+%         xline(peakidx,'--r')
+%         xline(winstart,'--k')
+%         xline(winend,'--k')
+%         xlim([peakidx - 300 peakidx + 300])
+%     end
 
     % upsampling
     r = 8;

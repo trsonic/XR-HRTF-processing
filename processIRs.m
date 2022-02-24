@@ -15,6 +15,7 @@ dirlist = dir('data/*');
 % key = '20211105-A-Jan';
 key = '20211126-XR-TR';
 % key = '20211126-XR-Gavin';
+% key = '20220223-XR-TR_median';
 
 % filter directories
 idx = [];
@@ -31,8 +32,11 @@ for i = 1:length(dirlist)
     mkdir([subjectdir 'figures/'])
     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
     
+    % headphone EQ
+    hpEQ(hpirBank, subjectdir)
+    
     % HMD influence correction(ITD and magnitude)
-    irBank = hmdCorrection(irBank);
+%     irBank = hmdCorrection(irBank);
 
     % time domain windowing
     plotting = 'false';
@@ -49,13 +53,87 @@ for i = 1:length(dirlist)
     irBank = dfeHRIRs(irBank, dfe_enabled, 'true', [subjectdir 'figures/']);
     plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
 
+    % save sofa file
+    saveAsSofa(irBank, subjectdir,'raw')
+    saveAsSofa(irBank, subjectdir,'dfe')
+    
     % save ambix config file
     saveAsAmbix(irBank, subjectdir)
 
-    % save sofa file
-    saveAsSofa(irBank, subjectdir)
-    
     save([subjectdir 'irBankProcessed.mat'], 'irBank')
+end
+
+function hpEQ(hpirBank, subjectdir)
+    % calculate average magnitude for left & right   
+    for i = 1:length(hpirBank)
+        if i == 1
+            Nfft = size(hpirBank(i).fullIR,1);
+            mag_ir_avgL = zeros(Nfft,1);
+            mag_ir_avgR = zeros(Nfft,1);
+            sn = 1 / length(hpirBank);
+        end
+        mag_ir_avgL = mag_ir_avgL + (abs(fft(hpirBank(i).fullIR(:,1), Nfft)).^2) * sn;
+        mag_ir_avgR = mag_ir_avgR + (abs(fft(hpirBank(i).fullIR(:,2), Nfft)).^2) * sn;
+    end
+    
+    mag_ir_avgL = sqrt(mag_ir_avgL);
+    mag_ir_avgR = sqrt(mag_ir_avgR);
+
+    % back to time domain
+    ir_avgL = ifft(mag_ir_avgL,'symmetric');
+    ir_avgR = ifft(mag_ir_avgR,'symmetric');
+    ir_avgL = circshift(ir_avgL,Nfft/2,1);
+    ir_avgR = circshift(ir_avgR,Nfft/2,1);
+    hpir = [ir_avgL ir_avgR];
+    Fs = hpirBank(1).Fs;
+
+    % adjust levels
+    [f,mag] = getMagnitude(hpir,Fs,'log');
+    idmin = find(f >= 200, 1 );           % f min
+    idmax = find(f <= 800, 1, 'last');    % f max
+    gain1 = mean(mag(idmin:idmax,1));
+    gain2 = mean(mag(idmin:idmax,2));
+    hpir(:,1) = hpir(:,1) * 10^(-gain1/20);
+    hpir(:,2) = hpir(:,2) * 10^(-gain2/20);
+    
+    % create EQ filters
+    invh(:,1) = createInverseFilter(hpir(:,1), Fs, 12, [400 600]);
+    invh(:,2) = createInverseFilter(hpir(:,2), Fs, 12, [400 600]);
+
+    %% plotting
+    figure('Name','HPTF + inv resp','NumberTitle','off','WindowStyle','docked');
+    hold on
+    box on
+
+    [f,mag] = getMagnitude(hpir(:,1),Fs,'log');
+    plot(f,mag,'-g','LineWidth',1);
+
+    [f,mag] = getMagnitude(hpir(:,2),Fs,'log');
+    plot(f,mag,'-r','LineWidth',1);
+
+    [f,mag] = getMagnitude(invh(:,1),Fs,'log');
+    plot(f,mag,'--g','LineWidth',2);
+
+    [f,mag] = getMagnitude(invh(:,2),Fs,'log');
+    plot(f,mag,'--r','LineWidth',2);
+
+    set(gca,'xscale','log')
+    grid on
+    xlim([20 Fs/2]);
+    ylim([-20 20]);
+    %             legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
+    xlabel('Frequency (Hz)');
+    ylabel('Magnitude (dB)');
+    
+    figure('Name','HPIR HPEQIR','NumberTitle','off','WindowStyle','docked');
+    hold on
+    plot(hpir(:,1))
+    plot(hpir(:,2))
+    plot(invh(:,1))
+    plot(invh(:,2))
+    
+    mkdir([subjectdir '/hpeq/'])
+    audiowrite([subjectdir '/hpeq/' 'hpeq.wav'], invh * 0.25, Fs)
 end
 
 function irBank = hmdCorrection(irBank)
@@ -92,9 +170,13 @@ end
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     % define window
-    win = hann(240).^4;
-    win = [win(1:end/2); ones(60,1); win(end/2+1:end);];
-    winshift = 120; % how many samples the window should be shifted forward from the peak
+%     win = hann(240).^4;
+%     win = [win(1:end/2); ones(60,1); win(end/2+1:end);];
+%     winshift = 120; % how many samples the window should be shifted forward from the peak
+    win = hann(180).^4;
+    win = [win(1:end/2); ones(20,1); win(end/2+1:end);];
+    winshift = 80; % how many samples the window should be shifted forward from the peak
+
     Nwin = length(win);
     if mod(Nwin,2) ~= 0
         disp('wrong window length, must be even')
@@ -104,6 +186,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
         irLeft = [zeros(Nwin,1); IRbank(i).fullIR(:,1);];
         irRight = [zeros(Nwin,1); IRbank(i).fullIR(:,2);];
         Fs = IRbank(i).Fs;
+        % get ITD, direct sound sample indices, and direct sound delay
         [IRbank(i).ITD,maxL,maxR,IRbank(i).dlyL,IRbank(i).dlyR] = getITD(irLeft,irRight,Fs);
 
         % apply window
@@ -241,8 +324,8 @@ function irBank = normalizeIRs(irBank, plotting)
     % find the free-field measurements and calculate inverse filters
     for i = find([irBank.ref])
         Fs = irBank(i).Fs;
-        irBank(i).invh(:,1) = createInverseFilter(irBank(i).winIR(:,1), Fs, 12);
-        irBank(i).invh(:,2) = createInverseFilter(irBank(i).winIR(:,2), Fs, 12);
+        irBank(i).invh(:,1) = createInverseFilter(irBank(i).winIR(:,1), Fs, 12, [60 300]);
+        irBank(i).invh(:,2) = createInverseFilter(irBank(i).winIR(:,2), Fs, 12, [60 300]);
     end
     
     if strcmp(plotting,'true')
@@ -269,8 +352,8 @@ function irBank = normalizeIRs(irBank, plotting)
 
             set(gca,'xscale','log')
             grid on
-            xlim([10 Fs/2]);
-            % ylim([-80 -30]);
+            xlim([20 Fs/2]);
+            ylim([-40 40]);
 %             legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
             xlabel('Frequency (Hz)');
             ylabel('Magnitude (dB)');
@@ -366,8 +449,8 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
     Nfft = length(ir_avgL);
     if dfe_enabled   
         % create dfe filters
-        dfeL = createInverseFilter(ir_avgL, Fs, 12);
-        dfeR = createInverseFilter(ir_avgR, Fs, 12);
+        dfeL = createInverseFilter(ir_avgL, Fs, 12, [60 300]);
+        dfeR = createInverseFilter(ir_avgR, Fs, 12, [60 300]);
     else
         % use "flat" filters
         dfeL = [1; zeros(Nfft-1,1)];
@@ -432,7 +515,7 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
         plot(f,mag,'--r','LineWidth',2);
                 
         set(gca,'xscale','log')
-        xlim([10 Fs/2]);
+        xlim([20 Fs/2]);
         ylim([-20 20]);
         ylabel('Magnitude (dB)')
         xlabel('Frequency (Hz)')
@@ -557,14 +640,15 @@ function saveAsAmbix(IRbank, subjectdir)
     IRbank(isnan([IRbank.azimuth])) = [];
     
     % save wav files
-    mkdir(subjectdir,'ambix_wav') 
+    mkdir(subjectdir,'ambix_wav_raw')
+    mkdir(subjectdir,'ambix_wav_dfe') 
     for i = 1:length(IRbank)
         filename = ['azi_' num2str(IRbank(i).azimuth,'%.2f') '_ele_' num2str(IRbank(i).elevation,'%.2f') '.wav'];
         disp(filename);
         IRbank(i).filename = filename;
         gain = 0.5; %10^(-3/20);
-%         audiowrite([subjectdir '/ambix_wav/' filename], gain*[IRbank(i).hrirLeft IRbank(i).hrirRight], IRbank(i).Fs)
-        audiowrite([subjectdir '/ambix_wav/' filename], gain * IRbank(i).dfeHRIR, IRbank(i).Fs)
+        audiowrite([subjectdir '/ambix_wav_raw/' filename], gain * IRbank(i).rawHRIR, IRbank(i).Fs)
+        audiowrite([subjectdir '/ambix_wav_dfe/' filename], gain * IRbank(i).dfeHRIR, IRbank(i).Fs)
     end
     
     % create decoder presets
@@ -654,7 +738,7 @@ function [ val ] = SPKR_ARRAY(azis,eles,dist)
     end
 end
 
-function saveAsSofa(IRbank, subjectdir)
+function saveAsSofa(IRbank, subjectdir, type)
     % Start SOFA
     SOFAstart
     
@@ -665,9 +749,11 @@ function saveAsSofa(IRbank, subjectdir)
     IRbank(isnan([IRbank.azimuth])) = [];
 
     for i = 1:length(IRbank)
-%        hrirs(i,1,:) = IRbank(i).hrirLeft;
-%        hrirs(i,2,:) = IRbank(i).hrirRight;
-       hrirs(i,:,:) = IRbank(i).dfeHRIR';
+        if strcmp(type,'raw')
+            hrirs(i,:,:) = IRbank(i).rawHRIR';
+        elseif strcmp(type,'dfe')
+            hrirs(i,:,:) = IRbank(i).dfeHRIR';
+        end
        azi = IRbank(i).azimuth;
        ele = IRbank(i).elevation;
        dist = IRbank(i).distance;
@@ -699,7 +785,7 @@ function saveAsSofa(IRbank, subjectdir)
     %% save the SOFA file
     % Data compression (0..uncompressed, 9..most compressed)
     compression=1; % results in a nice compression within a reasonable processing time
-    SOFAfn=fullfile(subjectdir,'xr-hrtf.sofa');
+    SOFAfn=fullfile(subjectdir,['xr-hrtf-' type '.sofa']);
     disp(['Saving:  ' SOFAfn]);
     SOFAsave(SOFAfn, Obj, compression);
 end
