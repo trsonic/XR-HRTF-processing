@@ -20,7 +20,7 @@ function invh_minph = createInverseFilter(h,Fs,Noct,lfefreq)
     disp(['length: ' num2str(length(h)) ', Fs: ' num2str(Fs)])
     
     %% regularization
-    H_reg = flattenMagHF(H,Fs, lfefreq);
+    H_reg = regularizeH(H,Fs, lfefreq);
     
     %% freq-domain smoothing if necessary...
     freq = ((0:Nfft-1)*Fs/Nfft)';
@@ -60,16 +60,21 @@ function invh_minph = createInverseFilter(h,Fs,Noct,lfefreq)
     
 
 
-    function H_fixed = flattenMagHF(H,Fs, lfefreq)
+    function H_fixed = regularizeH(H,Fs, lfefreq)
         f = (0:length(H)-1)*Fs/length(H);
         
-        % establish amplitude level at lf
-        idmin = find(f >= lfefreq(1), 1 );           % f min
-        idmax = find(f <= lfefreq(2), 1, 'last');    % f max
-%         idmin = find(f >= 60, 1 );           % f min
-%         idmax = find(f <= 300, 1, 'last');    % f max
-        lfext_amp = 10^(mean(20*log10(H(idmin:idmax)))/20);
-        lfext_smp = idmax;
+        if ~eq(lfefreq,[0 0])
+            % establish amplitude level at lf
+            idmin = find(f >= lfefreq(1), 1 );           % f min
+            idmax = find(f <= lfefreq(2), 1, 'last');    % f max
+    %         idmin = find(f >= 60, 1 );           % f min
+    %         idmax = find(f <= 300, 1, 'last');    % f max
+            lfext_amp = 10^(mean(20*log10(H(idmin:idmax)))/20);
+            lfext_smp = idmax;
+        else
+            lfext_amp = 1;
+            lfext_smp = 0;
+        end
 
         % establish amplitude level at hf
         idmin = find(f >= 16000, 1 );           % f min
@@ -86,7 +91,9 @@ function invh_minph = createInverseFilter(h,Fs,Noct,lfefreq)
         win1 = crossfade_win(length(crossfade_win)/2+1:end);
         win2 = crossfade_win(1:length(crossfade_win)/2);
         H_fixed = H;
-        H_fixed(1:lfext_smp) = lfext_amp;
+        if lfext_smp ~= 0
+            H_fixed(1:lfext_smp) = lfext_amp;
+        end
         H_fixed(idmin:idmax) = H(idmin:idmax) .* win1 + hfext_amp .* win2;
         H_fixed(idmax+1:end) = hfext_amp;
 

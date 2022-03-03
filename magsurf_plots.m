@@ -7,8 +7,8 @@ SOFAstart;
 
 % sofafile = 'data/20201217-122pt-2.5m-dayton_vt/xr_122pt.sofa';
 % sofafile = 'data/20211012-q2_tr/xr-hrtf.sofa';
-sofafile = 'data/20211126-XR-TR/xr-hrtf-raw.sofa';
-% sofafile = 'data/20220223-XR-TR_median/xr-hrtf-raw.sofa';
+% sofafile = 'data/20211126-XR-TR/xr-hrtf-raw.sofa';
+sofafile = 'data/20220223-XR-TR_median/xr-hrtf-raw.sofa';
 
 
 %% load sofa file

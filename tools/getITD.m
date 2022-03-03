@@ -1,7 +1,6 @@
 % get ITD, direct sound sample indices, and direct sound delay
 
 function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
-
     fx = 1500/(Fs/2);
     f = [0 fx fx 1];
     mhi = [1 1 0 0];
@@ -10,8 +9,8 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
     irLeft = filter(B, A, irLeft);
     irRight = filter(B, A, irRight);
     gd = grpdelay(B,A);
-    filter_dly = median(gd(1:end/2));
-%     filter_dly = 0;
+% %     filter_dly = median(gd(1:end/2));
+    filter_dly = 0;
 
     % find peak value and use windowing to cut off strong room
     % reflections in the contralateral ear
@@ -19,8 +18,8 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
     [~,miridx_right] = max(abs(irRight));
     
     peakidx = min(miridx_left,miridx_right);
-    winstart = peakidx-(Fs*0.0005);
-    winend = peakidx+(Fs*0.002);
+    winstart = peakidx-fix(Fs*0.00055);
+    winend = peakidx+fix(Fs*0.002);
     
 %     if true
 %         figure('Name','ITD debug','NumberTitle','off','WindowStyle','docked')
@@ -80,15 +79,4 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
         xline(winstart,'--k')
         xline(winend,'--k')
     end
- 
-%     function [h_min] = minph(h)
-%         % based on the invFIR function - look there for explanations
-%         % https://uk.mathworks.com/matlabcentral/fileexchange/19294-inverse-fir-filter
-%         n = length(h);
-%         h_cep = real(ifft(log(abs(fft(h(:,1))))));
-%         odd = fix(rem(n,2));
-%         wn = [1; 2*ones((n+odd)/2-1,1) ; ones(1-rem(n,2),1); zeros((n+odd)/2-1,1)];
-%         h_min = zeros(size(h(:,1)));
-%         h_min(:) = real(ifft(exp(fft(wn.*h_cep(:)))));
-%     end
 end
