@@ -33,7 +33,7 @@ for i = 1:length(dirlist)
 %     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
     
     % headphone EQ
-    hpEQ(hpirBank, subjectdir)
+%     hpEQ(hpirBank, subjectdir)
     
     % HMD influence correction(ITD and magnitude)
 %     irBank = hmdCorrection(irBank);
@@ -156,12 +156,10 @@ function irBank = hmdCorrection(irBank)
             dly = model_interp(idxl).dtoa_diff;
             shift = -1 * dly * 10^-6 * irBank(i).Fs;
             left = fraccircshift(left,shift);
-%             disp(shift)
             
             dly = model_interp(idxr).dtoa_diff;
             shift = -1 * dly * 10^-6 * irBank(i).Fs;
             right = fraccircshift(right,shift);
-%             disp(shift)
                   
             irBank(i).fullIR = [left right];    
         end
@@ -169,11 +167,7 @@ function irBank = hmdCorrection(irBank)
 end
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
-    % define window
-%     win = hann(240).^4;
-%     win = [win(1:end/2); ones(60,1); win(end/2+1:end);];
-%     winshift = 120; % how many samples the window should be shifted forward from the peak
-    
+    % define window    
     win1 = hann(80).^4;
     win1 = win1(1:end/2);
     win2 = hann(200).^4;
@@ -775,7 +769,7 @@ function saveAsSofa(IRbank, subjectdir, type)
         end
        azi = IRbank(i).azimuth;
        ele = IRbank(i).elevation;
-       dist = IRbank(i).distance;
+       dist = 1.5; %IRbank(i).distance;
 
        if(azi < 0)
            azi = azi + 360;
@@ -809,12 +803,9 @@ function saveAsSofa(IRbank, subjectdir, type)
     SOFAsave(SOFAfn, Obj, compression);
 end
 
-function plotAzEl(az,el,val, lim)
+function plotAzEl(az, el, val, lim)
     azimuth = -180:1:180;
     elevation = -90:1:90;
-    
-    % get absolute val
-%     val = abs(val);
 
     for i = 1:length(azimuth)
         for j = 1:length(elevation)
