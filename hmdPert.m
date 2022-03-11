@@ -60,15 +60,16 @@ for i = 1:size(IRb_Q2HMD,2)
     model(i).f = IRb_Q2HMD(i).f;
 end
 
-%% interpolate these differences using gaussian smoothing 
-% ls = getLebedevSphere(4334);
-ls = getLebedevSphere(50);
+%% interpolate these differences using gaussian smoothing
+% ls = getLebedevSphere(350);
+ls = getLebedevSphere(4334);
+% ls = getLebedevSphere(50);
 dirs = [];
 [dirs(:,1), dirs(:,2), ~] = cart2sph(ls.x,ls.y,ls.z);
 dirs = rad2deg(dirs);
 
 % gaussian window
-sigma = 10;
+sigma = 2.5;
 pd = makedist('Normal','mu',0,'sigma',sigma);
 figure('Name','smoothing window','NumberTitle','off','WindowStyle','docked');
 
@@ -114,6 +115,13 @@ hold on
 title('quest TOA difference interpolated')
 plotAzEl([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim)
 
+% save figure
+figlen = 8;
+width = 4*figlen;
+height = 3*figlen;
+set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+saveas(gcf,'data/hmdpert_output/toa_difference.jpg')   
+
 
 %% plot quest magnitude difference interpolated
 figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
@@ -122,12 +130,18 @@ hold on
 title('quest magnitude difference interpolated')
 plotAzEl([model_interp.az],[model_interp.el],[model_interp.mag_diff_mf],lim)
 
+% save figure
+figlen = 8;
+width = 4*figlen;
+height = 3*figlen;
+set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+saveas(gcf,'data/hmdpert_output/mag_difference.jpg')  
+
 
 %% CREATE INVERSE FILTERS
 
 %% plot quest magnitude difference interpolated
 figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
-
 
 
 for i = 1:size(model_interp,2)
@@ -163,7 +177,7 @@ for i = 1:size(model_interp,2)
     
 end
 
-save('data/model_interp.mat', 'model_interp')
+save('data/hmdpert_output/model_interp.mat', 'model_interp')
 
 %% RAW MEASUREMENT DATA (NOT USED)
 %% plot TOA difference

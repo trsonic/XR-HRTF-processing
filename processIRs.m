@@ -30,27 +30,29 @@ for i = 1:length(dirlist)
     subjectdir = [dirlist(i).folder '/' dirlist(i).name '/'];
     load([subjectdir 'irBank.mat'])
     mkdir([subjectdir 'figures/'])
-%     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
+    plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
     
     % headphone EQ
 %     hpEQ(hpirBank, subjectdir)
     
     % HMD influence correction(ITD and magnitude)
-%     irBank = hmdCorrection(irBank);
+    irBank = hmdCorrection(irBank);
 
     % time domain windowing
     plotting = 'false';
     irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
-%     plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
+    plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
 
     % calculate FF measurement inv filter and normalize all hrirs
     % do the low-frequency extension
-    irBank = normalizeIRs(irBank, 'true');
+    plotting = 'true';
+    irBank = normalizeIRs(irBank, plotting, [subjectdir 'figures/']);
     plotMagnitudes(irBank, '3-raw', [subjectdir 'figures/'])
 
     % diffuse-field equalization
     dfe_enabled = true;
-    irBank = dfeHRIRs(irBank, dfe_enabled, 'true', [subjectdir 'figures/']);
+    plotting = 'true';
+    irBank = dfeHRIRs(irBank, dfe_enabled, plotting, [subjectdir 'figures/']);
     plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
 
     % save sofa file
@@ -137,7 +139,7 @@ function hpEQ(hpirBank, subjectdir)
 end
 
 function irBank = hmdCorrection(irBank)
-    load('data/model_interp.mat')
+    load('data/hmdpert_output/model_interp.mat')
     
     for i = 1:length(irBank)
         if irBank(i).ref == 0
@@ -318,7 +320,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     end
 end
 
-function irBank = normalizeIRs(irBank, plotting)
+function irBank = normalizeIRs(irBank, plotting, save_fig_folder)
     % find the free-field measurements and calculate inverse filters
     for i = find([irBank.ref])
         Fs = irBank(i).Fs;
@@ -355,6 +357,14 @@ function irBank = normalizeIRs(irBank, plotting)
 %             legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
             xlabel('Frequency (Hz)');
             ylabel('Magnitude (dB)');
+            
+            % save figure
+            figlen = 8;
+            width = 4*figlen;
+            height = 3*figlen;
+            set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+            mkdir(save_fig_folder)
+            saveas(gcf,[save_fig_folder 'normalization-' num2str(i) '.jpg'])     
         end
 
 %         % plot freefield impulse response
@@ -557,29 +567,106 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
     end
 end
 
-function lfe_h = LFextension(h, Fs)
-%     figure('Name','lfe extension','NumberTitle','off','WindowStyle','docked');
-%     hold on
-%     plot(h)
-%     plot(minph(h))
-    
+function lfe_h = LFextension(h, Fs)    
     [acor, lag] = xcorr(h,minph(h));
     [~,index] = max(acor);
     shift = lag(index);
 
-    lfe_h = zeros(length(h),1);
-    lfe_h(shift) = 1;
-
-    xfreq = 250;
+    lfe_kronecker = zeros(length(h),1);
+    lfe_kronecker(shift) = 1;
+    
+    xfreq = 250; % crossover frequency
     filter_order = 2;    
     [B_highpass, A_highpass] = butter( filter_order, xfreq/Fs*2, 'high' );            
     [B_lowpass,  A_lowpass ] = butter( filter_order, xfreq/Fs*2, 'low'  );
-    output_low = filter(B_lowpass, A_lowpass, lfe_h);
+    output_low = filter(B_lowpass, A_lowpass, lfe_kronecker);
     output_low = filter(B_lowpass, A_lowpass, output_low);
     output_high = filter(B_highpass, A_highpass, h);
     output_high = filter(B_highpass, A_highpass, output_high);
-    
+        
     lfe_h = output_low + output_high;
+    
+%     %% modify phase
+%     N = length(lfe_h);
+%     HRTF_mag = abs(fft(lfe_h,N));    
+%     HRTF_phase = unwrap(angle(fft(h,N)));
+%     HRTF_phase_corrected = HRTF_phase;
+%     %extrapolate phase from data between 100-300 Hz
+%     f = (0:N-1)/N*Fs; %frequency vector
+%     %find indices for frequency range used to correct low frequency data
+%     indl = find(f>=100,1,'first');
+%     indh = find(f<300,1,'last');
+%     HRTF_phase_corrected(1:indl-1) = interp1(f(indl:indh),...
+%     HRTF_phase(indl:indh),f(1:indl-1),'linear','extrap');
+%     %compose complex spectrum
+%     HRTF_corrected = HRTF_mag.*exp(1i*HRTF_phase_corrected);
+%     %calculate impulse response
+%     lfe_h = ifft(HRTF_corrected,N,'symmetric');
+    
+%     %% plot
+%     figure('Name','lf extension','NumberTitle','off','WindowStyle','docked');
+%     subplot(2,2,1)
+%     hold on
+%     plot(h)
+%     plot(lfe_kronecker)
+%     plot(output_low,'--','LineWidth',1)
+%     plot(output_high,'--','LineWidth',1)
+%     plot(lfe_h,'-','LineWidth',2)
+%     xline(shift,'--k')
+%     
+%     legend('original','kronecker','low','high','extended','location','northeast')
+%     xlim([0 256]);
+%     ylim([-1 1]);
+%     
+%     subplot(2,2,2)
+%     hold on
+%     [gd,f] = grpdelay(h,1,2^10,'whole',Fs);
+%     plot(f,gd,'-b','LineWidth',1);
+%     [gd,f] = grpdelay(lfe_h,1,2^10,'whole',Fs);
+%     plot(f,gd,'-r','LineWidth',1);
+%     xlim([20 Fs/2]), ylim([-200 500])
+%     xlabel('Frequency (Hz)'), ylabel('group delay in samples')
+%     set(gca,'xscale','log')
+%     legend('original','extended','location','southwest')
+%     
+%     subplot(2,2,3)
+%     hold on
+%     [f,mag] = getMagnitude(h,Fs,'log');
+%     plot(f,mag,'-b','LineWidth',1);
+%     [f,mag] = getMagnitude(output_low,Fs,'log');
+%     plot(f,mag,'--g','LineWidth',2);
+%     [f,mag] = getMagnitude(output_high,Fs,'log');
+%     plot(f,mag,'--r','LineWidth',2);
+%     [f,mag] = getMagnitude(lfe_h,Fs,'log');
+%     plot(f,mag,'-m','LineWidth',1);
+%     legend('original','low','high','extended','location','southwest')
+%     xlim([20 Fs/2]);
+%     ylim([-40 40]);
+%     set(gca,'xscale','log')
+%     xlabel('Frequency (Hz)');
+%     ylabel('Magnitude (dB)');
+%     
+%     xline(250,'--k')
+%     xline(500,'--k')
+%     yline(-6,'--k')
+%     yline(-30,'--k')
+%     
+%     subplot(2,2,4)
+%     hold on
+%     [f,mag] = getPhase(h,Fs);
+%     plot(f,mag,'-b','LineWidth',1);
+%     [f,mag] = getPhase(output_low,Fs);
+%     plot(f,mag,'--g','LineWidth',2);
+%     [f,mag] = getPhase(output_high,Fs);
+%     plot(f,mag,'--r','LineWidth',2);
+%     [f,mag] = getPhase(lfe_h,Fs);
+%     plot(f,mag,'-m','LineWidth',1);
+%     legend('original','low','high','extended','location','southwest')
+%     xlim([20 Fs/2]);
+% %     ylim([-40 40]);
+%     set(gca,'xscale','log')
+%     xlabel('Frequency (Hz)');
+%     ylabel('Phase');
 end
 
 function plotMagnitudes(irBank, type, save_fig_folder)
@@ -616,8 +703,7 @@ function plotMagnitudes(irBank, type, save_fig_folder)
                 plot(f,mag,'-r','LineWidth',1);
             end
 
-    %         legend('Left Ear','Right Ear','location','southwest')
-    %         xlim([100 20000]);
+%             legend('Left Ear','Right Ear','location','southwest')
             xlim([20 Fs/2]);
             ylim([-40 40]);
             xlabel('Frequency (Hz)');
@@ -657,10 +743,13 @@ function saveAsAmbix(IRbank, subjectdir)
         audiowrite([subjectdir '/ambix_wav_raw/' filename], gain * IRbank(i).rawHRIR, IRbank(i).Fs)
         audiowrite([subjectdir '/ambix_wav_dfe/' filename], gain * IRbank(i).dfeHRIR, IRbank(i).Fs)
         rawHRIR = IRbank(i).rawHRIR;
-        [hpeq, Fs] = audioread([subjectdir '/hpeq/' 'hpeq.wav']);
-        hpeqHRIR = [conv(rawHRIR(:,1),hpeq(:,1)) conv(rawHRIR(:,2),hpeq(:,2))];
-        hpeqHRIR = hpeqHRIR(1:size(rawHRIR,1),:);
-        audiowrite([subjectdir '/ambix_wav_hpeq/' filename], gain * hpeqHRIR, IRbank(i).Fs)
+        
+        if exist([subjectdir '/hpeq/' 'hpeq.wav']) ~= 0
+            [hpeq, Fs] = audioread([subjectdir '/hpeq/' 'hpeq.wav']);
+            hpeqHRIR = [conv(rawHRIR(:,1),hpeq(:,1)) conv(rawHRIR(:,2),hpeq(:,2))];
+            hpeqHRIR = hpeqHRIR(1:size(rawHRIR,1),:);
+            audiowrite([subjectdir '/ambix_wav_hpeq/' filename], gain * hpeqHRIR, IRbank(i).Fs)
+        end
     end
     
     % create decoder presets

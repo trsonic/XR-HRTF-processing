@@ -6,44 +6,25 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
     mhi = [1 1 0 0];
     B = fir2(8,f,mhi);
     A = 1;
-    irLeft = filter(B, A, irLeft);
-    irRight = filter(B, A, irRight);
+    irLeftFiltered = filter(B, A, irLeft);
+    irRightFiltered = filter(B, A, irRight);
     gd = grpdelay(B,A);
-% %     filter_dly = median(gd(1:end/2));
+%     filter_dly = median(gd(1:end/2));
     filter_dly = 0;
 
     % find peak value and use windowing to cut off strong room
     % reflections in the contralateral ear
-    [~,miridx_left] = max(abs(irLeft));
-    [~,miridx_right] = max(abs(irRight));
+    [~,miridx_left] = max(abs(irLeftFiltered));
+    [~,miridx_right] = max(abs(irRightFiltered));
     
     peakidx = min(miridx_left,miridx_right);
-    winstart = peakidx-fix(Fs*0.00055);
-    winend = peakidx+fix(Fs*0.002);
-    
-%     if true
-%         figure('Name','ITD debug','NumberTitle','off','WindowStyle','docked')
-%         subplot(2,1,1)
-%         hold on
-%         plot(irLeft)
-%         xline(peakidx,'--r')
-%         xline(winstart,'--k')
-%         xline(winend,'--k')
-%         xlim([peakidx - 300 peakidx + 300])
-% 
-%         subplot(2,1,2)
-%         hold on
-%         plot(irRight)
-%         xline(peakidx,'--r')
-%         xline(winstart,'--k')
-%         xline(winend,'--k')
-%         xlim([peakidx - 300 peakidx + 300])
-%     end
+    winstart = peakidx-fix(Fs*0.001);
+    winend = peakidx+fix(Fs*0.003);
 
     % upsampling
     r = 8;
-    irLeftInterp = interp(irLeft(winstart:winend),r);
-    irRightInterp = interp(irRight(winstart:winend),r);        
+    irLeftInterp = interp(irLeftFiltered(winstart:winend),r);
+    irRightInterp = interp(irRightFiltered(winstart:winend),r);        
 
     % left ear delay
     [acor, lag] = xcorr(irLeftInterp,minph(irLeftInterp));
@@ -66,17 +47,21 @@ function [ITD, maxL, maxR, dlyL, dlyR] = getITD(irLeft, irRight, Fs)
         subplot(2,1,1)
         hold on
         plot(irLeft)
-        plot(minph(irLeft))
+        plot(irLeftFiltered)
         xline(peakidx,'--r')
         xline(winstart,'--k')
         xline(winend,'--k')
+        xline(maxL,'-g')
+        xlim([peakidx-200 peakidx+600])
 
         subplot(2,1,2)
         hold on
         plot(irRight)
-        plot(minph(irRight))
+        plot(irRightFiltered)
         xline(peakidx,'--r')
         xline(winstart,'--k')
         xline(winend,'--k')
+        xline(maxR,'-g')
+        xlim([peakidx-200 peakidx+600])
     end
 end
