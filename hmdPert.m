@@ -35,9 +35,33 @@ for i = 1:length(dirlist)
     end
 end
 
-%% get magnitude vectors
+%% ERB stuff
+erb = 1:40;
+Q = 9.265;
+L = 24.7;
+gamma = 1;
+for i = erb
+    fc(i) = Q * L * (exp(i*gamma/Q) - 1);
+    fbw(i) = gamma * L * exp(i*gamma/Q);
+end
+
+% figure
+% hold on
+% plot(erb,fc)
+% plot(erb,erb2hz(erb))
+
+
+%% get magnitude vectors and ERB
 for i = 1:size(IRbank,2)
-    [IRbank(i).f,IRbank(i).mag] = getMagnitude(IRbank(i).winIR,IRbank(i).Fs,'lin');
+    [f,mag] = getMagnitude(IRbank(i).winIR,IRbank(i).Fs,'lin');
+    
+    IRbank(i).f = f;
+    IRbank(i).mag = mag;
+    
+    for j = erb
+       erb_pwr(j) = sum(mag(f >= fc(j)-fbw(j)/2 & f < fc(j)+fbw(j)/2).^2);
+    end
+    IRbank(i).erb_pwr = erb_pwr;
 end
 
 
@@ -57,8 +81,64 @@ for i = 1:size(IRb_Q2HMD,2)
 %     model(i).mag_diff = (IRb_Q2HMD(i).mag-(IRb_NOHMD(i).mag+IRb_NOHMD2(i).mag)/2)';
 %     model(i).mag_diff = (IRb_Q2HMD(i).mag ./ sqrt(IRb_NOHMD(i).mag.^2+IRb_NOHMD2(i).mag.^2))';
     model(i).mag_diff = IRb_Q2HMD(i).mag ./ sqrt(0.5*IRb_NOHMD(i).mag.^2+0.5*IRb_NOHMD2(i).mag.^2);    
+    
+    for j = erb
+        model(i).sd(j) =  10 * log10(IRb_Q2HMD(i).erb_pwr(j) ./ sqrt(0.5*IRb_NOHMD(i).erb_pwr(j)^2+0.5*IRb_NOHMD2(i).erb_pwr(j)^2));
+    end
     model(i).f = IRb_Q2HMD(i).f;
 end
+
+%% plot analyzed directions
+dirs = unique([[model.azi]' [model.ele]'],'rows');
+idx_to_remove = [];
+for i = 1:size(dirs,1)
+    dist = distance(dirs(:,2),dirs(:,1),dirs(i,2),dirs(i,1));
+    idx = find(dist < 0.1);
+    
+    if length(idx) > 1
+       disp(idx)
+       idx_to_remove = [idx_to_remove; idx(2:end)];
+    end
+    
+end
+
+idx_to_remove = unique(idx_to_remove);
+dirs2 = dirs;
+dirs2(idx_to_remove,:)=[];
+
+figure('Name','directions mollweide','NumberTitle','off','WindowStyle','docked');
+hold on
+
+
+axesm('MapProjection','mollweid','MapLatLimit',[-90 90],'Gcolor','black','GLineWidth',1.0,'MLineLocation',45,'PLineLocation',30); 
+axis off
+gridm('on')
+% scatterm(dirs(:,2),dirs(:,1))
+scatterm(dirs2(:,2),dirs2(:,1),120,'k')
+
+% labels
+fsize = 12;
+fcolor = 'black';
+vertshift = -5;
+horishift = 5;
+textm(vertshift,horishift-135,'-135','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift-90,'-90','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift-45,'-45','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift+0,'0','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift+45,'45','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift+90,'90','color',fcolor,'fontsize',fsize);
+textm(vertshift,horishift+135,'135','color',fcolor,'fontsize',fsize);
+textm(-vertshift-60,horishift+0,'-60','color',fcolor,'fontsize',fsize);
+textm(-vertshift-30,horishift+0,'-30','color',fcolor,'fontsize',fsize);
+textm(vertshift+30,horishift+0,'30','color',fcolor,'fontsize',fsize);
+textm(vertshift+60,horishift+0,'60','color',fcolor,'fontsize',fsize);
+
+% save figure
+figlen = 8;
+width = 4*figlen;
+height = 3*figlen;
+set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+saveas(gcf,'data/hmdpert_output/analyzed_dirs.png')
 
 %% interpolate these differences using gaussian smoothing
 % ls = getLebedevSphere(350);
@@ -69,7 +149,7 @@ dirs = [];
 dirs = rad2deg(dirs);
 
 % gaussian window
-sigma = 2.5;
+sigma = 5;
 pd = makedist('Normal','mu',0,'sigma',sigma);
 figure('Name','smoothing window','NumberTitle','off','WindowStyle','docked');
 
@@ -95,54 +175,113 @@ for i = 1:size(dirs,1)
     
     % calculate magnitude difference
     mag_diff = zeros(1,size(model(1).mag_diff,2));
+    sd = zeros(1,size(model(1).sd,2));
 
     for j = 1:size(model,2)
         mag_diff = mag_diff + (model(j).mag_diff.^2) * weights(j);
+        sd = sd + model(j).sd * weights(j);
     end
     f = model(1).f;
     mag_diff = sqrt(mag_diff);
+    
     model_interp(i).f = f;
     model_interp(i).mag_diff = mag_diff;
-    mag_diff_mf = 20*log10(rms(mag_diff(f >= 2000 & f <= 8000)));
-    model_interp(i).mag_diff_mf = mag_diff_mf;
+    model_interp(i).mag_diff_lf = rms(10*log10(mag_diff(f >= 100 & f < 1000))); % low
+    model_interp(i).mag_diff_mf = rms(10*log10(mag_diff(f >= 1000 & f < 5000))); % mid
+    model_interp(i).mag_diff_hf = rms(10*log10(mag_diff(f >= 5000 & f < 16000))); % high
+    
+%     model_interp(i).sd_lf = sqrt(mean(sd(fc >= 100 & fc < 1000).^2));       % low
+%     model_interp(i).sd_mf = sqrt(mean(sd(fc >= 1000 & fc < 5000).^2));      % mid
+%     model_interp(i).sd_hf = sqrt(mean(sd(fc >= 5000 & fc < 16000).^2));     % high
+
+    model_interp(i).sd_lf = mean(sd(fc >= 100 & fc < 1000),'omitnan');       % low
+    model_interp(i).sd_mf = mean(sd(fc >= 1000 & fc < 5000),'omitnan');      % mid
+    model_interp(i).sd_hf = mean(sd(fc >= 5000 & fc < 16000),'omitnan');     % high
+
+
 end
 
 %% plot quest TOA difference interpolated
-figure('Name','TOA difference','NumberTitle','off','WindowStyle','docked');
-lim = [-20 80];
-nexttile
+figure('Name','quest TOA difference interpolated','NumberTitle','off','WindowStyle','docked');
+% tiledlayout(1,2)
+lim = [-20 60];
+% nexttile
 hold on
-title('quest TOA difference interpolated')
-plotAzEl([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim)
+% title('quest TOA difference interpolated')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim,'Time-of-arrival difference (us)')
+
+% nexttile
+% hold on
+% title('quest TOA difference interpolated')
+% plotAzEl([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim)
 
 % save figure
 figlen = 8;
 width = 4*figlen;
 height = 3*figlen;
 set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-saveas(gcf,'data/hmdpert_output/toa_difference.jpg')   
+saveas(gcf,'data/hmdpert_output/toa_difference.png')
 
 
 %% plot quest magnitude difference interpolated
-figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
-lim = [-12 12];
+figure('Name','quest magnitude difference interpolated','NumberTitle','off','WindowStyle','docked');
+t = tiledlayout(3,1);
+t.TileSpacing = 'compact';
+t.Padding = 'compact';
+nexttile
+lim = [-8 8];
 hold on
-title('quest magnitude difference interpolated')
-plotAzEl([model_interp.az],[model_interp.el],[model_interp.mag_diff_mf],lim)
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_lf],lim,'Magnitude difference (dB)')
+
+nexttile
+lim = [-8 8];
+hold on
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_mf],lim,'Magnitude difference (dB)')
+
+nexttile
+lim = [-8 8];
+hold on
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_hf],lim,'Magnitude difference (dB)')
 
 % save figure
 figlen = 8;
 width = 4*figlen;
-height = 3*figlen;
+height = 7*figlen;
 set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-saveas(gcf,'data/hmdpert_output/mag_difference.jpg')  
+saveas(gcf,'data/hmdpert_output/mag_difference.png')  
 
+
+%% plot quest magnitude difference interpolated
+figure('Name','quest magnitude difference interpolated','NumberTitle','off','WindowStyle','docked');
+t = tiledlayout(3,1);
+t.TileSpacing = 'compact';
+t.Padding = 'compact';
+nexttile
+lim = [-12 12];
+hold on
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.mag_diff_lf],lim,'Magnitude difference (dB)')
+
+nexttile
+lim = [-12 12];
+hold on
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.mag_diff_mf],lim,'Magnitude difference (dB)')
+
+nexttile
+lim = [-12 12];
+hold on
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.mag_diff_hf],lim,'Magnitude difference (dB)')
+
+% save figure
+figlen = 8;
+width = 4*figlen;
+height = 7*figlen;
+set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+saveas(gcf,'data/hmdpert_output/mag_difference.png')  
 
 %% CREATE INVERSE FILTERS
 
 %% plot quest magnitude difference interpolated
 figure('Name','mag difference','NumberTitle','off','WindowStyle','docked');
-
 
 for i = 1:size(model_interp,2)
     f = model_interp(i).f;
@@ -298,6 +437,58 @@ function idx = getIdx(IRbank,cat,key)
             end
         end
     end
+end
+
+function plotAzElM(az,el,val,lim,clbl)
+    azimuth = -180:1:180;
+    elevation = -90:1:90;
+
+    for i = 1:length(azimuth)
+        for j = 1:length(elevation)
+            dist = distance(elevation(j),azimuth(i),el,az);
+            idx = find(dist == min(dist));
+            value(j,i) = mean(val(idx));
+        end    
+    end
+    
+    axesm('MapProjection','mollweid','MapLatLimit',[-90 90],'Gcolor','black','GLineWidth',1.0,'MLineLocation',45,'PLineLocation',30); 
+    axis off
+    gridm('on')
+
+    % plot data
+    s = pcolorm(elevation,azimuth,value);
+    s.EdgeColor = 'none';
+
+    % color bar
+    caxis(lim)
+%     c=colorbar('location','southoutside','position',[0.2 0.0 0.6 0.05],'box','on','color',[0 0 0]); %[left, bottom, width, height]
+    c=colorbar('location','southoutside');
+    c.Label.String=clbl;
+    c.Label.FontSize=14;
+    c.FontSize=14;
+%     c.Limits=[0 500];
+%     c.Ticks=0:50:500;
+
+    % labels
+    fsize = 14;
+    fcolor = 'black';
+    vertshift = -5;
+    horishift = 5;
+    textm(vertshift,horishift-135,'-135','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift-90,'-90','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift-45,'-45','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift+0,'0','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift+45,'45','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift+90,'90','color',fcolor,'fontsize',fsize);
+    textm(vertshift,horishift+135,'135','color',fcolor,'fontsize',fsize);
+    textm(vertshift-60,horishift+0,'-60','color',fcolor,'fontsize',fsize);
+    textm(vertshift-30,horishift+0,'-30','color',fcolor,'fontsize',fsize);
+    textm(vertshift+30,horishift+0,'30','color',fcolor,'fontsize',fsize);
+    textm(vertshift+60,horishift+0,'60','color',fcolor,'fontsize',fsize);
+    
+    text(-2,1.25,'contralateral','color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
+    text(2,1.25,'ipsilateral','color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
+    
 end
 
 function plotAzEl(az,el,val,lim)

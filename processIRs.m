@@ -242,7 +242,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     for i = 1:length(IRbank)
         if ~isnan(IRbank(i).distance)
             gain_lin = IRbank(i).distance/ref_dist;
-            IRbank(i).gain = 20*log(gain_lin);
+            IRbank(i).gain = 20*log10(gain_lin);
             IRbank(i).winIR = IRbank(i).winIR * gain_lin;
         end
     end
