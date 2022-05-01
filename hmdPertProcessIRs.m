@@ -1,19 +1,29 @@
 close all
 clear
 
+%% RIG
+dirlist = dir('data/*-RIG-*');
+for i = 1:length(dirlist)
+    subjectdir = [dirlist(i).folder '/' dirlist(i).name '/']; inv_pol = false;
+    irBank = extractRigIRs(subjectdir,inv_pol,false);
+    irBank = adjustGains(irBank,-18,-30);
+    irBank = normalizePeak(irBank);
+    plotAndSave(subjectdir,irBank);
+end
+
+
+
+close all
+clear
+
 addpath('tools/')
 addpath('tools/invFIR/')
 addpath('tools/VoronoiSphere/')
 addpath('../API_MO/API_MO/')
 
 dirlist = dir('data/*');
-% key = '20201217-122pt-2.5m-dayton_vt';
-% key = '20201217-122pt-2.5m-canford_vt';
-% key = '20211012-q2_tr';
-% key = '20211105-A-Jan';
-key = '20211126-XR-TR';
-% key = '20211126-XR-Gavin';
-% key = '20220223-XR-TR_median';
+key = '-RIG-'; % for KEMAR measurements done in the rig
+% key = '20210923-RIG-KEMAR-NOHMD';
 
 % filter directories
 idx = [];
@@ -28,30 +38,24 @@ for i = 1:length(dirlist)
     subjectdir = [dirlist(i).folder '/' dirlist(i).name '/'];
     load([subjectdir 'irBank.mat'])
     mkdir([subjectdir 'figures/'])
-    plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
-    
-    % headphone EQ
-%     hpEQ(hpirBank, subjectdir)
-    
-    % HMD influence correction(ITD and magnitude)
-%     irBank = hmdCorrection(irBank);
+%     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
 
     % time domain windowing
     plotting = 'false';
     irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
-    plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
+%     plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
 
     % calculate FF measurement inv filter and normalize all hrirs
     % do the low-frequency extension
-    plotting = 'true';
+    plotting = 'false';
     irBank = normalizeIRs(irBank, plotting, [subjectdir 'figures/']);
-    plotMagnitudes(irBank, '3-raw', [subjectdir 'figures/'])
+%     plotMagnitudes(irBank, '3-raw', [subjectdir 'figures/'])
 
     % diffuse-field equalization
     dfe_enabled = true;
     plotting = 'true';
     irBank = dfeHRIRs(irBank, dfe_enabled, plotting, [subjectdir 'figures/']);
-    plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
+%     plotMagnitudes(irBank, '4-dfe', [subjectdir 'figures/'])
 
     % save sofa file
     saveAsSofa(irBank, subjectdir,'raw')
@@ -63,108 +67,8 @@ for i = 1:length(dirlist)
     save([subjectdir 'irBankProcessed.mat'], 'irBank')
 end
 
-function hpEQ(hpirBank, subjectdir)
-    % calculate average magnitude for left & right   
-    for i = 1:length(hpirBank)
-        if i == 1
-            Nfft = size(hpirBank(i).fullIR,1);
-            mag_ir_avgL = zeros(Nfft,1);
-            mag_ir_avgR = zeros(Nfft,1);
-            sn = 1 / length(hpirBank);
-        end
-        mag_ir_avgL = mag_ir_avgL + (abs(fft(hpirBank(i).fullIR(:,1), Nfft)).^2) * sn;
-        mag_ir_avgR = mag_ir_avgR + (abs(fft(hpirBank(i).fullIR(:,2), Nfft)).^2) * sn;
-    end
-    
-    mag_ir_avgL = sqrt(mag_ir_avgL);
-    mag_ir_avgR = sqrt(mag_ir_avgR);
 
-    % back to time domain
-    ir_avgL = ifft(mag_ir_avgL,'symmetric');
-    ir_avgR = ifft(mag_ir_avgR,'symmetric');
-    ir_avgL = circshift(ir_avgL,Nfft/2,1);
-    ir_avgR = circshift(ir_avgR,Nfft/2,1);
-    hpir = [ir_avgL ir_avgR];
-    Fs = hpirBank(1).Fs;
 
-    % adjust levels
-    [f,mag] = getMagnitude(hpir,Fs,'log');
-    idmin = find(f >= 200, 1 );           % f min
-    idmax = find(f <= 800, 1, 'last');    % f max
-    gain1 = mean(mag(idmin:idmax,1));
-    gain2 = mean(mag(idmin:idmax,2));
-    hpir(:,1) = hpir(:,1) * 10^(-gain1/20);
-    hpir(:,2) = hpir(:,2) * 10^(-gain2/20);
-    
-    % create EQ filters
-    invh(:,1) = createInverseFilter(hpir(:,1), Fs, 12, [400 600]);
-    invh(:,2) = createInverseFilter(hpir(:,2), Fs, 12, [400 600]);
-
-    %% plotting
-    figure('Name','HPTF + inv resp','NumberTitle','off','WindowStyle','docked');
-    hold on
-    box on
-
-    [f,mag] = getMagnitude(hpir(:,1),Fs,'log');
-    plot(f,mag,'-g','LineWidth',1);
-
-    [f,mag] = getMagnitude(hpir(:,2),Fs,'log');
-    plot(f,mag,'-r','LineWidth',1);
-
-    [f,mag] = getMagnitude(invh(:,1),Fs,'log');
-    plot(f,mag,'--g','LineWidth',2);
-
-    [f,mag] = getMagnitude(invh(:,2),Fs,'log');
-    plot(f,mag,'--r','LineWidth',2);
-
-    set(gca,'xscale','log')
-    grid on
-    xlim([20 Fs/2]);
-    ylim([-20 20]);
-    %             legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
-    xlabel('Frequency (Hz)');
-    ylabel('Magnitude (dB)');
-    
-    figure('Name','HPIR HPEQIR','NumberTitle','off','WindowStyle','docked');
-    hold on
-    plot(hpir(:,1))
-    plot(hpir(:,2))
-    plot(invh(:,1))
-    plot(invh(:,2))
-    
-    mkdir([subjectdir '/hpeq/'])
-    audiowrite([subjectdir '/hpeq/' 'hpeq.wav'], invh * 0.25, Fs)
-end
-
-function irBank = hmdCorrection(irBank)
-    load('data/hmdpert_output/model_interp.mat')
-    
-    for i = 1:length(irBank)
-        if irBank(i).ref == 0
-            dist = distance(irBank(i).elevation,irBank(i).azimuth,[model_interp.el],[model_interp.az]);
-            [~,idxl] = min(dist);
-            dist = distance(irBank(i).elevation,irBank(i).azimuth,[model_interp.el],-[model_interp.az]);
-            [~,idxr] = min(dist);
-            
-            % correct magnitude
-            left = irBank(i).fullIR(:,1);
-            right = irBank(i).fullIR(:,2);
-            left = conv(model_interp(idxl).invh,left);
-            right = conv(model_interp(idxr).invh,right); 
-
-            % correct time of arrival
-            dly = model_interp(idxl).dtoa_diff;
-            shift = -1 * dly * 10^-6 * irBank(i).Fs;
-            left = fraccircshift(left,shift);
-            
-            dly = model_interp(idxr).dtoa_diff;
-            shift = -1 * dly * 10^-6 * irBank(i).Fs;
-            right = fraccircshift(right,shift);
-                  
-            irBank(i).fullIR = [left right];    
-        end
-    end
-end
 
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     % define window    
@@ -219,6 +123,8 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     for i = 1:length(IRbank)
         IRbank(i).ITDwin = (IRbank(i).maxR - IRbank(i).maxL)  * 10^6 / IRbank(i).Fs;
     end
+    
+%     IRbank([IRbank.ref] == 1) = [];
     figure('Name','ITD','NumberTitle','off','WindowStyle','docked');
     tiledlayout(1,2)
     lim = [-1000 1000];
@@ -349,20 +255,20 @@ function irBank = normalizeIRs(irBank, plotting, save_fig_folder)
             plot(f,mag,'--r','LineWidth',2);
 
             set(gca,'xscale','log')
-%             grid on
+            grid on
             xlim([20 Fs/2]);
-            ylim([-30 30]);
-            legend('Left channel', 'Right channel', 'Left inverse filter', 'Right inverse filter','location','northeast')
+            ylim([-40 40]);
+%             legend('Left channel', 'Right channel','','', 'Left inverse filter', 'Right inverse filter','location','northwest')
             xlabel('Frequency (Hz)');
             ylabel('Magnitude (dB)');
             
             % save figure
-            figlen = 4;
+            figlen = 8;
             width = 4*figlen;
             height = 3*figlen;
             set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
             mkdir(save_fig_folder)
-            saveas(gcf,[save_fig_folder 'normalization-' num2str(i) '.png'])     
+            saveas(gcf,[save_fig_folder 'normalization-' num2str(i) '.jpg'])     
         end
 
 %         % plot freefield impulse response
@@ -392,16 +298,8 @@ function irBank = normalizeIRs(irBank, plotting, save_fig_folder)
     
     %% add LF extension
     for i = 1:length(irBank)
-        plotting = 'false';
-%         if irBank(i).azimuth == 90 && irBank(i).elevation == 0
-%             plotting = 'true';
-%         end
-        dist = 1.5; % reference distance
-        hd = 0.15; % head diameter / ear to ear distance
-        dd = dist + (hd/2) * sin(deg2rad(-irBank(i).azimuth)) * cos(deg2rad(irBank(i).elevation));
-        lfe_amp = 20*log10(dd/dist);
-        irBank(i).rawHRIR(:,1) = LFextension(irBank(i).rawHRIR(:,1), Fs, lfe_amp, plotting);
-        irBank(i).rawHRIR(:,2) = LFextension(irBank(i).rawHRIR(:,2), Fs, -lfe_amp, plotting);
+        irBank(i).rawHRIR(:,1) = LFextension(irBank(i).rawHRIR(:,1), Fs);
+        irBank(i).rawHRIR(:,2) = LFextension(irBank(i).rawHRIR(:,2), Fs);
     end
     
     %% cut equalized IRs
@@ -517,7 +415,7 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
         figure('Name','avg resp + dfe filter','NumberTitle','off','WindowStyle','docked');
         hold on
         box on
-%         grid on
+        grid on
         [f,mag] = getMagnitude(ir_avgL,Fs,'log');
         plot(f,mag,'-g','LineWidth',1);
         [f,mag] = getMagnitude(ir_avgR,Fs,'log');
@@ -532,27 +430,54 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
         ylim([-20 20]);
         ylabel('Magnitude (dB)')
         xlabel('Frequency (Hz)')
-        legend('Left ear avg', 'Rigth ear avg', 'Left DFE filter', 'Right DFE filter','location','southwest')
-%         title('DFE filter')
+        legend('Left ear avg', 'Rigth ear avg', 'Left DFE filter', 'Right DFE filter')
+        title('DFE filter')
         
         % save figure
-        figlen = 4;
+        figlen = 8;
         width = 4*figlen;
         height = 3*figlen;
         set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
         mkdir(save_fig_folder)
-        saveas(gcf,[save_fig_folder 'dfe.png'])        
+        saveas(gcf,[save_fig_folder 'dfe.jpg'])        
 %         close
+        
+%         % equalized magnitudes
+%         figure('Name','Magnitudes','NumberTitle','off','WindowStyle','docked');
+%         hold on
+%         for i = find([IRbank.azimuth] == 0 & [IRbank.elevation] == 0) %1:length(IRbank)
+%             Nfft = 1024;
+%             Fs = IRbank(i).Fs;
+%             f = (Fs/Nfft:Fs/Nfft:Fs)';
+% %             raw hrir
+%             plot(f,20*log10(abs(fft(IRbank(i).rawhrir(:,1),Nfft))),'-','linewidth',0.5)
+%             plot(f,20*log10(abs(fft(IRbank(i).rawhrir(:,2),Nfft))),'-','linewidth',0.5)
+% 
+% %             windowed hrir
+%             plot(f,20*log10(abs(fft(IRbank(i).winhrir(:,1),Nfft))),'-','linewidth',0.5)
+%             plot(f,20*log10(abs(fft(IRbank(i).winhrir(:,2),Nfft))),'-','linewidth',0.5)
+% 
+%             % dfe hrir
+%             plot(f,20*log10(abs(fft(IRbank(i).dfehrir(:,1),Nfft))),'-','linewidth',0.5)
+%             plot(f,20*log10(abs(fft(IRbank(i).dfehrir(:,2),Nfft))),'-','linewidth',0.5)
+%         end
+%         box on
+%         set(gca,'xscale','log')
+%         xticks([10 100 1000 10000])
+%         xlim([40 Fs/2])
+%         ylim([-60 20])
+%         xlabel('Frequency (Hz)')
+%         ylabel('Magnitude (dB)')
     end
 end
 
-function lfe_h = LFextension(h, Fs, lfe_amp, plotting)    
+function lfe_h = LFextension(h, Fs)    
     [acor, lag] = xcorr(h,minph(h));
     [~,index] = max(acor);
     shift = lag(index);
 
     lfe_kronecker = zeros(length(h),1);
-    lfe_kronecker(shift) = 1 * 10^(lfe_amp/20);
+    lfe_kronecker(shift) = 1;
     
     xfreq = 250; % crossover frequency
     filter_order = 2;    
@@ -565,93 +490,87 @@ function lfe_h = LFextension(h, Fs, lfe_amp, plotting)
         
     lfe_h = output_low + output_high;
     
-    if strcmp(plotting,'true')
-        %% simple plot
-        figure('Name','lf extension','NumberTitle','off','WindowStyle','docked');
-        hold on
-        [f,mag] = getMagnitude(h,Fs,'log');
-        plot(f,mag,'-b','LineWidth',1);
-        [f,mag] = getMagnitude(output_low,Fs,'log');
-        plot(f,mag,'--g','LineWidth',2);
-        [f,mag] = getMagnitude(output_high,Fs,'log');
-        plot(f,mag,'--r','LineWidth',2);
-        [f,mag] = getMagnitude(lfe_h,Fs,'log');
-        plot(f,mag,'-m','LineWidth',1);
-        legend('original','low','high','extended','location','northwest')
-        xlim([20 Fs/2]);
-        ylim([-30 20]);
-        set(gca,'xscale','log')
-        xlabel('Frequency (Hz)');
-        ylabel('Magnitude (dB)');
-        
-        % save figure
-        figlen = 4;
-        width = 4*figlen;
-        height = 3*figlen;
-        set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-        saveas(gcf,'lfe.png')  
-        
-        
-%         %% advanced plot
-%         figure('Name','lf extension','NumberTitle','off','WindowStyle','docked');
-%         subplot(2,2,1)
-%         hold on
-%         plot(h)
-%         plot(lfe_kronecker)
-%         plot(output_low,'--','LineWidth',1)
-%         plot(output_high,'--','LineWidth',1)
-%         plot(lfe_h,'-','LineWidth',2)
-%         xline(shift,'--k')
-% 
-%         legend('original','kronecker','low','high','extended','location','northeast')
-%         xlim([0 256]);
-%         ylim([-1 1]);
-% 
-%         subplot(2,2,2)
-%         hold on
-%         [gd,f] = grpdelay(h,1,2^10,'whole',Fs);
-%         plot(f,gd,'-b','LineWidth',1);
-%         [gd,f] = grpdelay(lfe_h,1,2^10,'whole',Fs);
-%         plot(f,gd,'-r','LineWidth',1);
-%         xlim([20 Fs/2]), ylim([-200 500])
-%         xlabel('Frequency (Hz)'), ylabel('group delay in samples')
-%         set(gca,'xscale','log')
-%         legend('original','extended','location','southwest')
-% 
-%         subplot(2,2,3)
-%         hold on
-%         [f,mag] = getMagnitude(h,Fs,'log');
-%         plot(f,mag,'-b','LineWidth',1);
-%         [f,mag] = getMagnitude(output_low,Fs,'log');
-%         plot(f,mag,'--g','LineWidth',2);
-%         [f,mag] = getMagnitude(output_high,Fs,'log');
-%         plot(f,mag,'--r','LineWidth',2);
-%         [f,mag] = getMagnitude(lfe_h,Fs,'log');
-%         plot(f,mag,'-m','LineWidth',1);
-%         legend('original','low','high','extended','location','northwest')
-%         xlim([20 Fs/2]);
-%         ylim([-30 20]);
-%         set(gca,'xscale','log')
-%         xlabel('Frequency (Hz)');
-%         ylabel('Magnitude (dB)');
-% 
-%         subplot(2,2,4)
-%         hold on
-%         [f,mag] = getPhase(h,Fs);
-%         plot(f,mag,'-b','LineWidth',1);
-%         [f,mag] = getPhase(output_low,Fs);
-%         plot(f,mag,'--g','LineWidth',2);
-%         [f,mag] = getPhase(output_high,Fs);
-%         plot(f,mag,'--r','LineWidth',2);
-%         [f,mag] = getPhase(lfe_h,Fs);
-%         plot(f,mag,'-m','LineWidth',1);
-%         legend('original','low','high','extended','location','southwest')
-%         xlim([20 Fs/2]);
-%     %     ylim([-40 40]);
-%         set(gca,'xscale','log')
-%         xlabel('Frequency (Hz)');
-%         ylabel('Phase');
-    end
+%     %% modify phase
+%     N = length(lfe_h);
+%     HRTF_mag = abs(fft(lfe_h,N));    
+%     HRTF_phase = unwrap(angle(fft(h,N)));
+%     HRTF_phase_corrected = HRTF_phase;
+%     %extrapolate phase from data between 100-300 Hz
+%     f = (0:N-1)/N*Fs; %frequency vector
+%     %find indices for frequency range used to correct low frequency data
+%     indl = find(f>=100,1,'first');
+%     indh = find(f<300,1,'last');
+%     HRTF_phase_corrected(1:indl-1) = interp1(f(indl:indh),...
+%     HRTF_phase(indl:indh),f(1:indl-1),'linear','extrap');
+%     %compose complex spectrum
+%     HRTF_corrected = HRTF_mag.*exp(1i*HRTF_phase_corrected);
+%     %calculate impulse response
+%     lfe_h = ifft(HRTF_corrected,N,'symmetric');
+    
+%     %% plot
+%     figure('Name','lf extension','NumberTitle','off','WindowStyle','docked');
+%     subplot(2,2,1)
+%     hold on
+%     plot(h)
+%     plot(lfe_kronecker)
+%     plot(output_low,'--','LineWidth',1)
+%     plot(output_high,'--','LineWidth',1)
+%     plot(lfe_h,'-','LineWidth',2)
+%     xline(shift,'--k')
+%     
+%     legend('original','kronecker','low','high','extended','location','northeast')
+%     xlim([0 256]);
+%     ylim([-1 1]);
+%     
+%     subplot(2,2,2)
+%     hold on
+%     [gd,f] = grpdelay(h,1,2^10,'whole',Fs);
+%     plot(f,gd,'-b','LineWidth',1);
+%     [gd,f] = grpdelay(lfe_h,1,2^10,'whole',Fs);
+%     plot(f,gd,'-r','LineWidth',1);
+%     xlim([20 Fs/2]), ylim([-200 500])
+%     xlabel('Frequency (Hz)'), ylabel('group delay in samples')
+%     set(gca,'xscale','log')
+%     legend('original','extended','location','southwest')
+%     
+%     subplot(2,2,3)
+%     hold on
+%     [f,mag] = getMagnitude(h,Fs,'log');
+%     plot(f,mag,'-b','LineWidth',1);
+%     [f,mag] = getMagnitude(output_low,Fs,'log');
+%     plot(f,mag,'--g','LineWidth',2);
+%     [f,mag] = getMagnitude(output_high,Fs,'log');
+%     plot(f,mag,'--r','LineWidth',2);
+%     [f,mag] = getMagnitude(lfe_h,Fs,'log');
+%     plot(f,mag,'-m','LineWidth',1);
+%     legend('original','low','high','extended','location','southwest')
+%     xlim([20 Fs/2]);
+%     ylim([-40 40]);
+%     set(gca,'xscale','log')
+%     xlabel('Frequency (Hz)');
+%     ylabel('Magnitude (dB)');
+%     
+%     xline(250,'--k')
+%     xline(500,'--k')
+%     yline(-6,'--k')
+%     yline(-30,'--k')
+%     
+%     subplot(2,2,4)
+%     hold on
+%     [f,mag] = getPhase(h,Fs);
+%     plot(f,mag,'-b','LineWidth',1);
+%     [f,mag] = getPhase(output_low,Fs);
+%     plot(f,mag,'--g','LineWidth',2);
+%     [f,mag] = getPhase(output_high,Fs);
+%     plot(f,mag,'--r','LineWidth',2);
+%     [f,mag] = getPhase(lfe_h,Fs);
+%     plot(f,mag,'-m','LineWidth',1);
+%     legend('original','low','high','extended','location','southwest')
+%     xlim([20 Fs/2]);
+% %     ylim([-40 40]);
+%     set(gca,'xscale','log')
+%     xlabel('Frequency (Hz)');
+%     ylabel('Phase');
 end
 
 function plotMagnitudes(irBank, type, save_fig_folder)
