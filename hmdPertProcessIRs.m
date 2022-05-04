@@ -1,21 +1,6 @@
 close all
 clear
 
-%% RIG
-dirlist = dir('data/*-RIG-*');
-for i = 1:length(dirlist)
-    subjectdir = [dirlist(i).folder '/' dirlist(i).name '/']; inv_pol = false;
-    irBank = extractRigIRs(subjectdir,inv_pol,false);
-    irBank = adjustGains(irBank,-18,-30);
-    irBank = normalizePeak(irBank);
-    plotAndSave(subjectdir,irBank);
-end
-
-
-
-close all
-clear
-
 addpath('tools/')
 addpath('tools/invFIR/')
 addpath('tools/VoronoiSphere/')
@@ -67,9 +52,6 @@ for i = 1:length(dirlist)
     save([subjectdir 'irBankProcessed.mat'], 'irBank')
 end
 
-
-
-
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     % define window    
     win1 = hann(80).^4;
@@ -91,6 +73,10 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
         
         % get ITD, direct sound sample indices, and direct sound delay
         [IRbank(i).ITD,maxL,maxR,IRbank(i).dlyL,IRbank(i).dlyR] = getITD(irLeft,irRight,Fs);
+        
+        % get ILD
+        IRbank(i).ILD = getILD(irLeft,irRight,Fs);
+
 
         % apply window
         winstart = fix(maxL - winshift);

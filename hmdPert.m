@@ -23,10 +23,12 @@ for i = 1:length(dirlist)
                IRbank(end).azimuth = irBank(j).azimuth;
                IRbank(end).ITD = irBank(j).ITD;
                IRbank(end).dly = irBank(j).dlyL;
+               IRbank(end).ILD = irBank(j).ILD;
            else
                IRbank(end).azimuth = -irBank(j).azimuth;
                IRbank(end).ITD = -irBank(j).ITD;
                IRbank(end).dly = irBank(j).dlyR;
+               IRbank(end).ILD = -irBank(j).ILD;
            end
            IRbank(end).elevation = irBank(j).elevation;
            IRbank(end).winIR = irBank(j).winIR(:,ch);
@@ -77,7 +79,9 @@ model=struct;
 for i = 1:size(IRb_Q2HMD,2)
     model(i).azi = IRb_Q2HMD(i).azimuth;
     model(i).ele = IRb_Q2HMD(i).elevation;
+    model(i).itd_diff = (IRb_Q2HMD(i).ITD-(IRb_NOHMD(i).ITD+IRb_NOHMD2(i).ITD)/2)';
     model(i).dtoa_diff = (IRb_Q2HMD(i).dly-(IRb_NOHMD(i).dly+IRb_NOHMD2(i).dly)/2)';
+    model(i).ild_diff = (IRb_Q2HMD(i).ILD-(IRb_NOHMD(i).ILD+IRb_NOHMD2(i).ILD)/2)';
     model(i).mag_diff = IRb_Q2HMD(i).mag ./ sqrt(0.5*IRb_NOHMD(i).mag.^2+0.5*IRb_NOHMD2(i).mag.^2);    
     
     for j = erb
@@ -93,45 +97,76 @@ for i = 1:size(model,2)
     model(i).sd_hf = rms(model(i).sd(fc >= 5000 & fc < 16000),'omitnan');     % high
 end
 
-%% plot quest TOA difference
-figure('Name','quest TOA difference','NumberTitle','off','WindowStyle','docked');
+
+
+%% plot quest ITD Error
+figure('Name','quest ITD Error','NumberTitle','off','WindowStyle','docked');
 % tiledlayout(1,2)
-lim = [-20 80];
+lim = [0 80];
 % nexttile
 hold on
-% title('quest TOA difference interpolated')
-plotAzElM([model.azi],[model.ele],[model.dtoa_diff],lim,'Time-of-arrival difference (us)')
+plotAzElM([model.azi],[model.ele],abs([model.itd_diff]),lim,'ITD Error (us)','','')
 
 % save figure
 figlen = 8;
 width = 4*figlen;
 height = 3*figlen;
 set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-saveas(gcf,'data/hmdpert_output/toa_difference.png')
-% exportgraphics(gcf,'data/hmdpert_output/toa_difference.png','Resolution',300)
+saveas(gcf,'data/hmdpert_output/itd_error.png')
+
+%% plot quest ILD Error
+figure('Name','quest ILD Error','NumberTitle','off','WindowStyle','docked');
+% tiledlayout(1,2)
+lim = [0 4];
+% nexttile
+hold on
+plotAzElM([model.azi],[model.ele],abs([model.ild_diff]),lim,'ILD Error (dB)','','')
+
+% save figure
+figlen = 8;
+width = 4*figlen;
+height = 3*figlen;
+set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+saveas(gcf,'data/hmdpert_output/ild_error.png')
+
+% %% plot quest TOA difference
+% figure('Name','quest TOA difference','NumberTitle','off','WindowStyle','docked');
+% % tiledlayout(1,2)
+% lim = [-20 80];
+% % nexttile
+% hold on
+% plotAzElM([model.azi],[model.ele],[model.dtoa_diff],lim,'Time-of-arrival difference (us)','contralateral','ipsilateral')
+% 
+% % save figure
+% figlen = 8;
+% width = 4*figlen;
+% height = 3*figlen;
+% set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
+% saveas(gcf,'data/hmdpert_output/toa_difference.png')
+% % exportgraphics(gcf,'data/hmdpert_output/toa_difference.png','Resolution',300)
 
 
-%% plot quest magnitude difference interpolated
+%% plot quest spectral difference
 figure('Name','quest spectral difference','NumberTitle','off','WindowStyle','docked');
 t = tiledlayout(3,1);
 t.TileSpacing = 'compact';
 t.Padding = 'compact';
 nexttile
-lim = [-8 8];
+lim = [0 8];
 hold on
-plotAzElM([model.azi],[model.ele],[model.sd_lf],lim,'Spectral difference (dB)')
+plotAzElM([model.azi],[model.ele],[model.sd_lf],lim,'Spectral difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (3/3)-0.1-0.01, .15, .05], 'string', '0.1 - 1 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 nexttile
-lim = [-8 8];
+lim = [0 8];
 hold on
-plotAzElM([model.azi],[model.ele],[model.sd_mf],lim,'Spectral difference (dB)')
+plotAzElM([model.azi],[model.ele],[model.sd_mf],lim,'Spectral difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (2/3)-0.1, .15, .05], 'string', '1 - 5 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 nexttile
-lim = [-8 8];
+lim = [0 8];
 hold on
-plotAzElM([model.azi],[model.ele],[model.sd_hf],lim,'Spectral difference (dB)')
+plotAzElM([model.azi],[model.ele],[model.sd_hf],lim,'Spectral difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (1/3)-0.1+0.01, .15, .05], 'string', '5 - 16 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 % save figure
@@ -200,7 +235,7 @@ lim = [-20 80];
 % nexttile
 hold on
 % title('quest TOA difference interpolated')
-plotAzElM([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim,'Time-of-arrival difference (us)')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim,'Time-of-arrival difference (us)','contralateral','ipsilateral')
 
 % save figure
 figlen = 8;
@@ -218,19 +253,19 @@ t.Padding = 'compact';
 nexttile
 lim = [-8 8];
 hold on
-plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_lf],lim,'Magnitude difference (dB)')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_lf],lim,'Magnitude difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (3/3)-0.1-0.01, .15, .05], 'string', '0.1 - 1 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 nexttile
 lim = [-8 8];
 hold on
-plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_mf],lim,'Magnitude difference (dB)')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_mf],lim,'Magnitude difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (2/3)-0.1, .15, .05], 'string', '1 - 5 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 nexttile
 lim = [-8 8];
 hold on
-plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_hf],lim,'Magnitude difference (dB)')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.sd_hf],lim,'Magnitude difference (dB)','contralateral','ipsilateral')
 annotation('textbox', [.055, (1/3)-0.1+0.01, .15, .05], 'string', '5 - 16 kHz','fontsize',18,'LineStyle','none','HorizontalAlignment','center','VerticalAlignment','middle')
 
 % save figure
@@ -286,7 +321,7 @@ function idx = getIdx(IRbank,cat,key)
     end
 end
 
-function plotAzElM(az,el,val,lim,clbl)
+function plotAzElM(az,el,val,lim,clbl,texta,textb)
     step = 0.5; % 0.5
     azimuth = -180:step:180;
     elevation = -90:step:90;
@@ -336,6 +371,6 @@ function plotAzElM(az,el,val,lim,clbl)
     textm(vertshift+30,horishift+0,'30','color',fcolor,'fontsize',fsize);
     textm(vertshift+60,horishift+0,'60','color',fcolor,'fontsize',fsize);
     
-    text(-2,1.25,'contralateral','color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
-    text(2,1.25,'ipsilateral','color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
+    text(-2,1.25,texta,'color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
+    text(2,1.25,textb,'color',fcolor,'fontsize',fsize,'rotation',0,'horizontalalignment','center','verticalalignment','middle');
 end
