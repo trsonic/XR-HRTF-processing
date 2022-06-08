@@ -22,44 +22,46 @@ figure
 hold on
 
 rb_dist = 0.6:0.1:1.2; % reflective boundary min distance from the speaker - head axis
-direct_dist = 0.3:0.1:10; % speaker - head distance vector
+direct_dist = 0.6:0.1:10; % speaker - head distance vector
+
+c = 343;
 
 for i = 1:length(rb_dist)
    for j = 1:length(direct_dist)
       ref_dist = 2 * sqrt((direct_dist(j)/2)^2 + rb_dist(i)^2);
-      itdg(i,j) = (ref_dist - direct_dist(j)) * 2.9; % in ms
+      itdg(i,j) = (ref_dist - direct_dist(j)) * (1000/c); % in ms
    end
 end
 
 for i = 1:length(rb_dist)
     plot(direct_dist,itdg(i,:))
-    text(0.2,itdg(i,1)+0.2,[num2str(rb_dist(i)) ' m'])
+    text(0.3,itdg(i,1)+0.2,[num2str(rb_dist(i)) ' m'])
 %     x = [0.2/10  (itdg(i,1)+0.2)/7];
 %     y = [1.2/10 (itdg(i,1)+1.2)/7];
 %     annotation('textarrow',x,y,'String',[num2str(rb_dist(i)) ' m'])
 end
 
-xlim([0 10])
+xlim([0 4])
 ylim([0 7])
 ylabel('Initial Time Delay Gap (ms)')
-xlabel('speaker - head distance (m)')
+xlabel('Speaker - head distance d_d (m)')
 
-text(1.2,3.3,'Room boundary distance','rotation',90)
+text(0.17,3.1,'Room boundary distance d_b','rotation',90)
 
-ff_limit = 2;
+ff_limit = 1.5;
 xline(ff_limit,'--k')
-text(ff_limit+0.2,5,'Free field limit','rotation',90)
+text(ff_limit+0.2,5,'Far field boundary','rotation',90)
 
 win_length = (140/48000) * 1000;
 yline(win_length,'--k')
-text(5,win_length+0.3,'Time window length')
+text(2.8,win_length+0.3,'Time window length')
 
 % save figure
 figlen = 4;
 width = 4*figlen;
 height = 3*figlen;
 set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-saveas(gcf,'itdg_calc.png')
+saveas(gcf,'itdg_calc.pdf')
 
 
 

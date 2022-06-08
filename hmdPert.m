@@ -122,6 +122,9 @@ lim = [0 4];
 hold on
 plotAzElM([model.azi],[model.ele],abs([model.ild_diff]),lim,'ILD Error (dB)','','')
 
+% [maxv,idx] = max(abs([model.ild_diff]));
+
+
 % save figure
 figlen = 8;
 width = 4*figlen;
