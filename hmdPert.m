@@ -105,7 +105,7 @@ figure('Name','quest ITD Error','NumberTitle','off','WindowStyle','docked');
 lim = [0 80];
 % nexttile
 hold on
-plotAzElM([model.azi],[model.ele],abs([model.itd_diff]),lim,'ITD Error (us)','','')
+plotAzElM([model.azi],[model.ele],abs([model.itd_diff]),lim,'ITD Error (μs)','','')
 
 % save figure
 figlen = 8;
@@ -138,7 +138,7 @@ saveas(gcf,'data/hmdpert_output/ild_error.png')
 % lim = [-20 80];
 % % nexttile
 % hold on
-% plotAzElM([model.azi],[model.ele],[model.dtoa_diff],lim,'Time-of-arrival difference (us)','contralateral','ipsilateral')
+% plotAzElM([model.azi],[model.ele],[model.dtoa_diff],lim,'Time-of-arrival difference (μs)','contralateral','ipsilateral')
 % 
 % % save figure
 % figlen = 8;
@@ -238,7 +238,7 @@ lim = [-20 80];
 % nexttile
 hold on
 % title('quest TOA difference interpolated')
-plotAzElM([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim,'Time-of-arrival difference (us)','contralateral','ipsilateral')
+plotAzElM([model_interp.az],[model_interp.el],[model_interp.dtoa_diff],lim,'Time-of-arrival difference (μs)','contralateral','ipsilateral')
 
 % save figure
 figlen = 8;

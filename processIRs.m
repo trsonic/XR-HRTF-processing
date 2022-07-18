@@ -71,10 +71,9 @@ for i = 1:length(dirlist)
     
     interpHrirBank = interpHRIRs(irBank,'dfe');
     saveAsSofa(interpHrirBank,subjectdir,'interp-dfe')
-
-
 end
 
+%% Functions
 function hpEQ(hpirBank, subjectdir)
     % calculate average magnitude for left & right   
     for i = 1:length(hpirBank)
@@ -898,35 +897,6 @@ function saveAsSofa(IRbank, subjectdir, type)
     SOFAsave(SOFAfn, Obj, compression);
 end
 
-function plotAzEl(az, el, val, lim)
-    azimuth = -180:1:180;
-    elevation = -90:1:90;
-
-    for i = 1:length(azimuth)
-        for j = 1:length(elevation)
-            dist = distance(elevation(j),azimuth(i),el,az);
-            idx = find(dist == min(dist));
-            if length(idx) > 1
-                value(j,i) = median(val(idx));
-            else
-                value(j,i) = val(idx);
-            end
-
-        end    
-    end
-
-    s = pcolor(azimuth,elevation,value);
-    s.EdgeColor = 'none';
-    xlim([-180 180])
-    ylim([-90 90])
-    zlim(lim)
-    caxis(lim)
-    xlabel('Azimuth (deg)')
-    ylabel('Elevation (deg)')
-%     title('MFSD')
-    colorbar
-end
-
 function interpHrirBank = interpHRIRs(hrirBank, type)
     % get minimum phase hrirs
     for i = 1:length(hrirBank)
@@ -975,8 +945,6 @@ function interpHrirBank = interpHRIRs(hrirBank, type)
                                        right_hrir(bid(i,2),:)*bw(i,2) + ...
                                        right_hrir(bid(i,3),:)*bw(i,3)) / ...
                                        sum(bw(i,:));
-        
-
         
         if strcmp(type,'raw')
             interpHrirBank(i).rawHRIR = [interpHrirBank(i).left_hrir; interpHrirBank(i).right_hrir]';                        
