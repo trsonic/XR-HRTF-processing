@@ -416,7 +416,7 @@ function irBank = normalizeIRs(irBank, plotting, save_fig_folder)
 %             plotting = 'true';
 %         end
         dist = 1.5; % reference distance
-        hd = 0.15; % head diameter / ear to ear distance
+        hd = 0.16; % head diameter / ear to ear distance
         dd = dist + (hd/2) * sin(deg2rad(-irBank(i).azimuth)) * cos(deg2rad(irBank(i).elevation));
         lfe_amp = 20*log10(dd/dist);
         irBank(i).rawHRIR(:,1) = LFextension(irBank(i).rawHRIR(:,1), Fs, lfe_amp, plotting);
@@ -458,7 +458,6 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
     sn = s./sum(s);
     
     % calculate average magnitude for left & right
-%     Nfft = 4096;    
     for i = 1:length(irBank)
         if i == 1
             Nfft = size(irBank(i).rawHRIR,1);
@@ -468,31 +467,34 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
         mag_ir_avgL = mag_ir_avgL + (abs(fft(irBank(i).rawHRIR(:,1), Nfft)).^2) * sn(i);
         mag_ir_avgR = mag_ir_avgR + (abs(fft(irBank(i).rawHRIR(:,2), Nfft)).^2) * sn(i);
     end
+
+    mag_ir_avgLR = sqrt(mag_ir_avgL/2 + mag_ir_avgR/2);
     mag_ir_avgL = sqrt(mag_ir_avgL);
     mag_ir_avgR = sqrt(mag_ir_avgR);
 
     % back to time domain
+    ir_avgLR = ifft(mag_ir_avgLR,'symmetric');
+    ir_avgLR = circshift(ir_avgLR,Nfft/2,1);
+
     ir_avgL = ifft(mag_ir_avgL,'symmetric');
     ir_avgR = ifft(mag_ir_avgR,'symmetric');
-    ir_avgL=circshift(ir_avgL,Nfft/2,1);
-    ir_avgR=circshift(ir_avgR,Nfft/2,1);
+    ir_avgL = circshift(ir_avgL,Nfft/2,1);
+    ir_avgR = circshift(ir_avgR,Nfft/2,1);
     
     % inv fir Nfft and filter length
     Nfft = length(ir_avgL);
     if dfe_enabled   
         % create dfe filters
-        dfeL = createInverseFilter(ir_avgL, Fs, 12, [60 300]);
-        dfeR = createInverseFilter(ir_avgR, Fs, 12, [60 300]);
+        dfeLR = createInverseFilter(ir_avgLR, Fs, 12, [0 0]);
     else
         % use "flat" filters
-        dfeL = [1; zeros(Nfft-1,1)];
-        dfeR = [1; zeros(Nfft-1,1)];
+        dfeLR = [1; zeros(Nfft-1,1)];
     end
 
     %% filter hrirs with dfe filters
     for i = 1:length(irBank)
-        irBank(i).dfeHRIR(:,1) = conv(dfeL,irBank(i).rawHRIR(:,1));
-        irBank(i).dfeHRIR(:,2) = conv(dfeR,irBank(i).rawHRIR(:,2));  
+        irBank(i).dfeHRIR(:,1) = conv(dfeLR,irBank(i).rawHRIR(:,1));
+        irBank(i).dfeHRIR(:,2) = conv(dfeLR,irBank(i).rawHRIR(:,2));  
     end
     
     %% cut equalized IRs
@@ -537,21 +539,21 @@ function irBank = dfeHRIRs(irBank, dfe_enabled, plotting, save_fig_folder)
         hold on
         box on
 %         grid on
+        [f,mag] = getMagnitude(ir_avgLR,Fs,'log');
+        plot(f,mag,'-b','LineWidth',1);
         [f,mag] = getMagnitude(ir_avgL,Fs,'log');
         plot(f,mag,'-g','LineWidth',1);
         [f,mag] = getMagnitude(ir_avgR,Fs,'log');
         plot(f,mag,'-r','LineWidth',1);
-        [f,mag] = getMagnitude(dfeL,Fs,'log');
-        plot(f,mag,'--g','LineWidth',2);
-        [f,mag] = getMagnitude(dfeR,Fs,'log');
-        plot(f,mag,'--r','LineWidth',2);
+        [f,mag] = getMagnitude(dfeLR,Fs,'log');
+        plot(f,mag,'--b','LineWidth',1.5);
                 
         set(gca,'xscale','log')
-        xlim([20 Fs/2]);
+        xlim([100 Fs/2]);
         ylim([-20 20]);
         ylabel('Magnitude (dB)')
         xlabel('Frequency (Hz)')
-        legend('Left ear average', 'Rigth ear average', 'Left DFE filter', 'Right DFE filter','location','southwest')
+        legend('Left and Right Ear Average', 'Left Ear Average', 'Right Ear Average', 'DFE Filter','Location','southwest')
 %         title('DFE filter')
         
         % save figure
