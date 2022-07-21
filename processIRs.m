@@ -13,8 +13,8 @@ dirlist = dir('data/*');
 % key = '20201217-122pt-2.5m-canford_vt';
 % key = '20211012-q2_tr';
 % key = '20211105-A-Jan';
-key = '20211126-XR-TR';
-% key = '20211126-XR-Gavin';
+% key = '20211126-XR-TR';
+key = '20211126-XR-Gavin';
 % key = '20220223-XR-TR_median';
 
 % filter directories
@@ -900,27 +900,21 @@ function saveAsSofa(IRbank, subjectdir, type)
 end
 
 function interpHrirBank = interpHRIRs(hrirBank, type)
-    % get minimum phase hrirs
+    % get hrirs
     for i = 1:length(hrirBank)
         if strcmp(type,'raw')
-            left_hrir(i,:) = minph(hrirBank(i).rawHRIR(:,1));
-            right_hrir(i,:) = minph(hrirBank(i).rawHRIR(:,2));
+            left_hrir(i,:) = hrirBank(i).rawHRIR(:,1);
+            right_hrir(i,:) = hrirBank(i).rawHRIR(:,2);
         elseif strcmp(type,'dfe')
-            left_hrir(i,:) = minph(hrirBank(i).dfeHRIR(:,1));
-            right_hrir(i,:) = minph(hrirBank(i).dfeHRIR(:,2));
+            left_hrir(i,:) = hrirBank(i).dfeHRIR(:,1);
+            right_hrir(i,:) = hrirBank(i).dfeHRIR(:,2);
         end
-
         ITD(i) = hrirBank(i).ITD;
     end
 
     % get interpolated dirs matrix
     azel = [[hrirBank.azimuth]' [hrirBank.elevation]'];
     azel_interp = [];
-%     for az = -180:2:180
-%         for el = -90:2:90
-%             azel_interp = [azel_interp; az el];
-%         end
-%     end
     ls = getLebedevSphere(4334);
     dirs = [];
     [dirs(:,1), dirs(:,2), ~] = cart2sph(ls.x,ls.y,ls.z);
@@ -929,33 +923,62 @@ function interpHrirBank = interpHRIRs(hrirBank, type)
     % get barycentric weights
     [bid, bw] = barycentric_interpolation(azel, azel_interp);
 
-    % calculate interpolated minimum phase hrirs
+    % calculate interpolated hrirs
     for i = 1:length(azel_interp)
         interpHrirBank(i).azimuth = azel_interp(i,1);
         interpHrirBank(i).elevation = azel_interp(i,2);
         interpHrirBank(i).Fs = unique([hrirBank.Fs]);
+
         interpHrirBank(i).ITD =       (ITD(bid(i,1))*bw(i,1) + ...
                                        ITD(bid(i,2))*bw(i,2) + ...
                                        ITD(bid(i,3))*bw(i,3)) / ...
                                        sum(bw(i,:));
-        interpHrirBank(i).left_hrir = (left_hrir(bid(i,1),:)*bw(i,1) + ...
-                                       left_hrir(bid(i,2),:)*bw(i,2) + ...
-                                       left_hrir(bid(i,3),:)*bw(i,3)) / ...
+
+        s1 = (ITD(bid(i,1)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        s2 = (ITD(bid(i,2)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        s3 = (ITD(bid(i,3)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        interpHrirBank(i).left_hrir = (fraccircshift(left_hrir(bid(i,1),:),s1)*bw(i,1) + ...
+                                       fraccircshift(left_hrir(bid(i,2),:),s2)*bw(i,2) + ...
+                                       fraccircshift(left_hrir(bid(i,3),:),s3)*bw(i,3)) / ...
                                        sum(bw(i,:));
 
-        interpHrirBank(i).right_hrir = (right_hrir(bid(i,1),:)*bw(i,1) + ...
-                                       right_hrir(bid(i,2),:)*bw(i,2) + ...
-                                       right_hrir(bid(i,3),:)*bw(i,3)) / ...
+%         figure('Name','IR Alignment','NumberTitle','off','WindowStyle','docked')
+%         subplot(2,2,1)
+%         hold on
+%         plot(left_hrir(bid(i,1),:))
+%         plot(left_hrir(bid(i,2),:))
+%         plot(left_hrir(bid(i,3),:))
+%         subplot(2,2,3)
+%         hold on
+%         plot(fraccircshift(left_hrir(bid(i,1),:),s1))
+%         plot(fraccircshift(left_hrir(bid(i,2),:),s2))
+%         plot(fraccircshift(left_hrir(bid(i,3),:),s3))
+
+
+        s1 = -(ITD(bid(i,1)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        s2 = -(ITD(bid(i,2)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        s3 = -(ITD(bid(i,3)) - interpHrirBank(i).ITD)/2 * 10^-6 * interpHrirBank(i).Fs;
+        interpHrirBank(i).right_hrir = (fraccircshift(right_hrir(bid(i,1),:),s1)*bw(i,1) + ...
+                                       fraccircshift(right_hrir(bid(i,2),:),s2)*bw(i,2) + ...
+                                       fraccircshift(right_hrir(bid(i,3),:),s3)*bw(i,3)) / ...
                                        sum(bw(i,:));
+
+%         subplot(2,2,2)
+%         hold on
+%         plot(right_hrir(bid(i,1),:))
+%         plot(right_hrir(bid(i,2),:))
+%         plot(right_hrir(bid(i,3),:))
+%         subplot(2,2,4)
+%         hold on
+%         plot(fraccircshift(right_hrir(bid(i,1),:),s1))
+%         plot(fraccircshift(right_hrir(bid(i,2),:),s2))
+%         plot(fraccircshift(right_hrir(bid(i,3),:),s3))
         
         if strcmp(type,'raw')
             interpHrirBank(i).rawHRIR = [interpHrirBank(i).left_hrir; interpHrirBank(i).right_hrir]';                        
-            interpHrirBank(i).rawHRIR = injectITD(interpHrirBank(i).rawHRIR,interpHrirBank(i).ITD,interpHrirBank(i).Fs);
         elseif strcmp(type,'dfe')
             interpHrirBank(i).dfeHRIR = [interpHrirBank(i).left_hrir; interpHrirBank(i).right_hrir]';                        
-            interpHrirBank(i).dfeHRIR = injectITD(interpHrirBank(i).dfeHRIR,interpHrirBank(i).ITD,interpHrirBank(i).Fs);
         end
-
     end
 
     plotHMFmags(interpHrirBank)
@@ -989,22 +1012,6 @@ function [idx, bweights] = barycentric_interpolation(azel, azel_interp)
         idx(i,:) = id;
         bweights(i,:) = bw;
     end
-end
-
-function h_ITD = injectITD(h,ITD,Fs)
-    shift_l = (750 - ITD/2) * 10^-6 * Fs;
-    shift_r = (750 + ITD/2) * 10^-6 * Fs;
-    h_l = fraccircshift(h(:,1),shift_l);
-    h_r = fraccircshift(h(:,2),shift_r);
-    h_ITD = [h_l h_r];
-    
-%     % plot
-%     subplot(2,1,1)
-%     hold on
-%     plot(h)
-%     subplot(2,1,2)
-%     hold on
-%     plot(h_ITD)
 end
 
 function plotHMFmags(irBank)
