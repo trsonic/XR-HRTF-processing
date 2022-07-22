@@ -13,8 +13,8 @@ dirlist = dir('data/*');
 % key = '20201217-122pt-2.5m-canford_vt';
 % key = '20211012-q2_tr';
 % key = '20211105-A-Jan';
-% key = '20211126-XR-TR';
-key = '20211126-XR-Gavin';
+key = '20211126-XR-TR';
+% key = '20211126-XR-Gavin';
 % key = '20220223-XR-TR_median';
 
 % filter directories
@@ -60,18 +60,16 @@ for i = 1:length(dirlist)
     saveAsSofa(irBank, subjectdir,'dfe')
     
     % save ambix config file
-    addpath('../adt/')
-    adt_initialize
     saveAsAmbix(irBank, subjectdir)
 
     save([subjectdir 'irBankProcessed.mat'], 'irBank')
     load([subjectdir 'irBankProcessed.mat'])
     
-    % do barycentric interpolation of hrirs using time alignment
-    interpHrirBank = interpHRIRs(irBank,'raw','align');
+    % do barycentric interpolation of hrirs    
+    interpHrirBank = interpHRIRs(irBank,'raw');
     saveAsSofa(interpHrirBank,subjectdir,'interp-raw')
     
-    interpHrirBank = interpHRIRs(irBank,'dfe','align');
+    interpHrirBank = interpHRIRs(irBank,'dfe');
     saveAsSofa(interpHrirBank,subjectdir,'interp-dfe')
 end
 
