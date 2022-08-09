@@ -1,34 +1,3 @@
-close all
-clear
-
-addpath('tools/')
-
-dirlist = dir('data/*');
-key = '-RIG-'; % for KEMAR measurements done in the rig
-
-% filter directories
-idx = [];
-for i = 1:length(dirlist)
-    if contains(dirlist(i).name,key)
-        idx = [idx i];
-    end
-end
-dirlist = dirlist(idx);
-
-for i = 1:length(dirlist)
-    subjectdir = [dirlist(i).folder '/' dirlist(i).name '/'];
-    load([subjectdir 'irBank.mat'])
-    mkdir([subjectdir 'figures/'])
-%     plotMagnitudes(irBank, '1-measured', [subjectdir 'figures/'])
-
-    % time domain windowing
-    plotting = 'false';
-    irBank = winIRs(irBank, plotting, [subjectdir 'figures/windowing/']); % set 'true' to save plots
-%     plotMagnitudes(irBank, '2-win', [subjectdir 'figures/'])
-
-    save([subjectdir 'irBankProcessed.mat'], 'irBank')
-end
-
 function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     % define window    
     win1 = hann(80).^4;
@@ -50,10 +19,6 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
         
         % get ITD, direct sound sample indices, and direct sound delay
         [IRbank(i).ITD,maxL,maxR,IRbank(i).dlyL,IRbank(i).dlyR] = getITD(irLeft,irRight,Fs);
-        
-        % get ILD
-        IRbank(i).ILD = getILD(irLeft,irRight,Fs);
-
 
         % apply window
         winstart = fix(maxL - winshift);
@@ -86,8 +51,6 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
     for i = 1:length(IRbank)
         IRbank(i).ITDwin = (IRbank(i).maxR - IRbank(i).maxL)  * 10^6 / IRbank(i).Fs;
     end
-    
-%     IRbank([IRbank.ref] == 1) = [];
     figure('Name','ITD','NumberTitle','off','WindowStyle','docked');
     tiledlayout(1,2)
     lim = [-1000 1000];
@@ -126,7 +89,7 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             cla
             plot(IRbank(i).fullIR(:,1),'-b')
             xline(IRbank(i).maxL, '--k','linewidth',2)
-            xline(IRbank(i).toasmp, '--g')
+%             xline(IRbank(i).toasmp, '--g')
             xlabel('Samples')
             ylabel('Amplitude')
             ylim(range)
@@ -135,11 +98,12 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             plot(IRbank(i).maxL-winshift:IRbank(i).maxL-winshift+Nwin-1,win,'--')
             ylabel('Linear gain')
             xlim([IRbank(i).maxL-Nwin IRbank(i).maxL+Nwin])
-            title(['Left Raw HRIR' ' azi ' num2str(IRbank(i).azimuth) ' ele ' num2str(IRbank(i).elevation)])
+%             title(['Full BRIR (left)' ' azi ' num2str(IRbank(i).azimuth) ' ele ' num2str(IRbank(i).elevation)])
+            box on
             
-            legend('IR','peak sample','mean peak sample','window','Location','SouthWest')
+            legend('IR','Peak','Windowing function','Location','NorthWest')
 
-            subplot(2,2,2)
+            subplot(2,2,3)
             cla
             hold on
             plot(IRbank(i).winIR(:,1),'-b')
@@ -147,9 +111,10 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             ylabel('Amplitude')
             ylim(range);
             xlim([0 size(IRbank(i).winIR,1)])
-            title('Left Windowed HRIR')
-            
-            subplot(2,2,3)
+%             title(['Windowed BRIR (left)' ' azi ' num2str(IRbank(i).azimuth) ' ele ' num2str(IRbank(i).elevation)])
+            box on
+
+            subplot(2,2,2)
             hold on
             yyaxis left
             cla
@@ -164,7 +129,9 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             plot(IRbank(i).maxR-winshift:IRbank(i).maxR-winshift+Nwin-1,win,'--')
             ylabel('Linear gain')
             xlim([IRbank(i).maxR-Nwin IRbank(i).maxR+Nwin])
-            title('Right Raw HRIR')
+%             title('Right Raw HRIR')
+            box on
+
 
             subplot(2,2,4)
             cla
@@ -174,15 +141,18 @@ function IRbank = winIRs(IRbank, plotting, save_fig_folder)
             ylabel('Amplitude')
             ylim(range);
             xlim([0 size(IRbank(i).winIR,1)])
-            title('Right Windowed HRIR')
+%             title('Right Windowed HRIR')
+            box on
+
             
             % save figure
             figlen = 8;
             width = 4*figlen;
-            height = 3*figlen;
+            height = 2*figlen;
             set(gcf,'Units','centimeters','PaperPosition',[0 0 width height],'PaperSize',[width height]);
-            saveas(gcf,[save_fig_folder 'windowing_fig' num2str(i)  '.jpg'])
-%             close
+%             saveas(gcf,[save_fig_folder 'windowing_fig' num2str(i)  '.jpg'])
+            saveas(gcf,[save_fig_folder 'windowing_fig' num2str(i)  '.pdf'])
+            close
         end
     end
 end

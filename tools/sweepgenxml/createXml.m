@@ -1,7 +1,9 @@
 close all
 clear
 
-ls = getLebedevSphere(50);
+addpath('../')
+
+ls = getLebedevSphere(86);
 lsxyz(:,1) = ls.x;
 lsxyz(:,2) = ls.y;
 lsxyz(:,3) = ls.z;
@@ -23,11 +25,14 @@ scatter3(ls.x,ls.y,ls.z)
 [speakerAzEl(:,1), speakerAzEl(:,2), ~] = cart2sph(lsxyz(:,1),lsxyz(:,2),lsxyz(:,3));
 speakerAzEl = rad2deg(speakerAzEl);
 
+% swap (0;-90) to (180;-90) to be measured by pointing head down
 [tf, index]=ismember(speakerAzEl,[0 -90],'rows');
 speakerAzEl(tf,:) = [180 -90];
 
+% sort all measurement points
 speakerAzEl = sortrows(speakerAzEl, [1 2]);
 
+% find first measurement point and reorder the list
 idx = find(speakerAzEl(:,1) == 0,1,'first');
 speakerAzEl = [speakerAzEl(idx:end,:); speakerAzEl(1:idx-1,:)];
 

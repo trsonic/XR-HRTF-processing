@@ -2,12 +2,10 @@ close all
 clear
 
 %% add paths and initialize SOFA API
-addpath('../API_MO/API_MO/')
+addpath('../API_MO/SOFAtoolbox/')
 SOFAstart;
 
-sofafile = 'data/20211126-XR-TR/xr-hrtf-interp-raw.sofa';
-% sofafile = 'data/20220223-XR-TR_median/xr-hrtf-raw.sofa';
-
+sofafile = 'data/20220807-XR-SUBJ001B/xr-hrtf-interp-raw.sofa';
 
 %% load sofa file
 hrtf = SOFAload(sofafile);
