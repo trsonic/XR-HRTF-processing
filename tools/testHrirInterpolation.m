@@ -8,7 +8,7 @@ load([subjectdir 'irBankProcessed.mat'])
 addpath('tools/TriangleRayIntersection/')
 addpath('tools/')
 
-interpHrirBank = interpHRIRs(irBank,'raw','minph');
+% interpHrirBank = interpHRIRs(irBank,'raw','minph');
 interpHrirBank = interpHRIRs(irBank,'raw','align');
 
 % interpHrirBank = interpHRIRs(irBank,'dfe','minph');

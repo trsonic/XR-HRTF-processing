@@ -23,6 +23,9 @@ function interpHrirBank = interpHRIRs(hrirBank, type, method)
         ITD(i) = hrirBank(i).ITD;
     end
 
+    figure('Name','ITD','NumberTitle','off','WindowStyle','docked');
+    plotAzElM([hrirBank.azimuth],[hrirBank.elevation],[hrirBank.ITD], [-800 800],'ITD (μs)','contralateral','ipsilateral')
+
     %% get interpolated dirs matrix
     azel = [[hrirBank.azimuth]' [hrirBank.elevation]'];
     azel_interp = [];
@@ -139,7 +142,10 @@ function interpHrirBank = interpHRIRs(hrirBank, type, method)
     end
 
     plotHMFmags(interpHrirBank)
-    plotITD([interpHrirBank.azimuth],[interpHrirBank.elevation],[interpHrirBank.ITD], [-1000 1000])
+%     plotITD([interpHrirBank.azimuth],[interpHrirBank.elevation],[interpHrirBank.ITD], [-1000 1000])
+    figure('Name','ITD interpolated','NumberTitle','off','WindowStyle','docked');
+    plotAzElM([interpHrirBank.azimuth],[interpHrirBank.elevation],[interpHrirBank.ITD], [-800 800],'ITD (μs)','contralateral','ipsilateral')
+
 
     function [idx, bweights] = barycentric_interpolation(azel, azel_interp)
         [vx(:,1), vx(:,2), vx(:,3)] = sph2cart(deg2rad(azel(:,1)),deg2rad(azel(:,2)),1);
